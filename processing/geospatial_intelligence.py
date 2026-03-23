@@ -5,6 +5,61 @@ from typing import Dict, List, Optional
 
 EARTH_RADIUS_M = 6371008.8
 
+CAPACITY_CONTEXT_PROFILES: Dict[str, Dict[str, object]] = {
+    "open_ground": {
+        "label": "Open Ground",
+        "edge_buffer_width_m": 0.6,
+        "edge_buffer_cap_ratio": 0.22,
+        "flow_corridor_ratio": 0.10,
+        "safety_clearance_ratio": 0.08,
+        "density_profile_ppm2": {
+            "comfort": 1.1,
+            "safe": 1.8,
+            "dense": 2.6,
+            "critical": 3.4,
+        },
+    },
+    "mixed_urban": {
+        "label": "Mixed Urban",
+        "edge_buffer_width_m": 1.1,
+        "edge_buffer_cap_ratio": 0.42,
+        "flow_corridor_ratio": 0.22,
+        "safety_clearance_ratio": 0.12,
+        "density_profile_ppm2": {
+            "comfort": 0.7,
+            "safe": 1.2,
+            "dense": 1.8,
+            "critical": 2.4,
+        },
+    },
+    "street_market": {
+        "label": "Street / Market",
+        "edge_buffer_width_m": 1.4,
+        "edge_buffer_cap_ratio": 0.50,
+        "flow_corridor_ratio": 0.26,
+        "safety_clearance_ratio": 0.14,
+        "density_profile_ppm2": {
+            "comfort": 0.6,
+            "safe": 1.0,
+            "dense": 1.5,
+            "critical": 2.1,
+        },
+    },
+    "enclosed_venue": {
+        "label": "Enclosed Venue",
+        "edge_buffer_width_m": 0.8,
+        "edge_buffer_cap_ratio": 0.30,
+        "flow_corridor_ratio": 0.18,
+        "safety_clearance_ratio": 0.10,
+        "density_profile_ppm2": {
+            "comfort": 0.9,
+            "safe": 1.5,
+            "dense": 2.2,
+            "critical": 3.0,
+        },
+    },
+}
+
 
 def _to_radians(coords: List[Dict[str, float]]) -> List[Dict[str, float]]:
     out = []
@@ -79,7 +134,25 @@ def polygon_centroid(coords: List[Dict[str, float]]) -> Dict[str, float]:
     }
 
 
-def capacity_levels(area_m2: float) -> Dict[str, int]:
+def capacity_levels(area_m2: float, usable_ratio: float = 1.0, density_profile: Optional[Dict[str, float]] = None) -> Dict[str, int]:
+    ratio = max(0.0, min(1.0, float(usable_ratio)))
+    effective_area = area_m2 * ratio
+    densities = density_profile or {
+        "comfort": 1.2,
+        "safe": 2.0,
+        "dense": 3.0,
+    }
+    low = int(effective_area * float(densities.get("comfort", 1.2)))
+    medium = int(effective_area * float(densities.get("safe", 2.0)))
+    high = int(effective_area * float(densities.get("dense", 3.0)))
+    return {
+        "low_density_capacity": low,
+        "safe_capacity": medium,
+        "maximum_capacity": high,
+    }
+
+
+def gross_capacity_levels(area_m2: float) -> Dict[str, int]:
     low = int(area_m2 * 1.0)
     medium = int(area_m2 * 2.0)
     high = int(area_m2 * 4.0)
@@ -90,48 +163,51 @@ def capacity_levels(area_m2: float) -> Dict[str, int]:
     }
 
 
-def effective_capacity_model(area_m2: float, perimeter_m: float) -> Dict[str, float]:
+def effective_capacity_model(area_m2: float, perimeter_m: float, capacity_context: str = "mixed_urban") -> Dict[str, float]:
+    profile = CAPACITY_CONTEXT_PROFILES.get(capacity_context, CAPACITY_CONTEXT_PROFILES["mixed_urban"])
+    context_label = str(profile["label"])
+    density_profile = dict(profile["density_profile_ppm2"])
+
     if area_m2 <= 0.0:
         return {
+            "capacity_context": capacity_context,
+            "capacity_context_label": context_label,
             "gross_area_m2": 0.0,
             "edge_buffer_loss_m2": 0.0,
             "flow_corridor_loss_m2": 0.0,
             "safety_clearance_loss_m2": 0.0,
+            "shape_irregularity_loss_m2": 0.0,
             "usable_area_m2": 0.0,
             "usable_ratio": 0.0,
+            "compactness_index": 0.0,
             "comfort_capacity": 0,
             "safe_capacity": 0,
             "dense_capacity": 0,
             "critical_capacity": 0,
             "recommended_max_capacity": 0,
-            "density_profile_ppm2": {
-                "comfort": 1.2,
-                "safe": 2.0,
-                "dense": 3.0,
-                "critical": 4.0,
-            },
+            "density_profile_ppm2": density_profile,
         }
 
-    # Edge buffer approximates unusable band near boundaries/walls/fences.
-    edge_buffer_width_m = 0.75
-    edge_buffer_loss_m2 = min(area_m2 * 0.35, perimeter_m * edge_buffer_width_m)
+    edge_buffer_width_m = float(profile["edge_buffer_width_m"])
+    edge_buffer_cap_ratio = float(profile["edge_buffer_cap_ratio"])
+    flow_corridor_ratio = float(profile["flow_corridor_ratio"])
+    safety_clearance_ratio = float(profile["safety_clearance_ratio"])
 
-    # Reserve area for movement corridors and emergency access.
-    flow_corridor_loss_m2 = area_m2 * 0.12
+    edge_buffer_loss_m2 = min(area_m2 * edge_buffer_cap_ratio, perimeter_m * edge_buffer_width_m)
 
-    # Reserve operational safety margin.
-    safety_clearance_loss_m2 = area_m2 * 0.08
+    compactness_index = 0.0
+    if perimeter_m > 0:
+        compactness_index = (4.0 * math.pi * area_m2) / (perimeter_m ** 2)
+    compactness_index = max(0.0, min(1.0, compactness_index))
+    shape_irregularity_ratio = max(0.0, min(0.25, (0.75 - compactness_index) * 0.45))
+    shape_irregularity_loss_m2 = area_m2 * shape_irregularity_ratio
 
-    blocked_area = edge_buffer_loss_m2 + flow_corridor_loss_m2 + safety_clearance_loss_m2
+    flow_corridor_loss_m2 = area_m2 * flow_corridor_ratio
+    safety_clearance_loss_m2 = area_m2 * safety_clearance_ratio
+
+    blocked_area = edge_buffer_loss_m2 + flow_corridor_loss_m2 + safety_clearance_loss_m2 + shape_irregularity_loss_m2
     usable_area_m2 = max(0.0, area_m2 - blocked_area)
     usable_ratio = usable_area_m2 / area_m2 if area_m2 > 0 else 0.0
-
-    density_profile = {
-        "comfort": 1.2,
-        "safe": 2.0,
-        "dense": 3.0,
-        "critical": 4.0,
-    }
 
     comfort_capacity = int(usable_area_m2 * density_profile["comfort"])
     safe_capacity = int(usable_area_m2 * density_profile["safe"])
@@ -139,12 +215,16 @@ def effective_capacity_model(area_m2: float, perimeter_m: float) -> Dict[str, fl
     critical_capacity = int(usable_area_m2 * density_profile["critical"])
 
     return {
+        "capacity_context": capacity_context,
+        "capacity_context_label": context_label,
         "gross_area_m2": round(area_m2, 2),
         "edge_buffer_loss_m2": round(edge_buffer_loss_m2, 2),
         "flow_corridor_loss_m2": round(flow_corridor_loss_m2, 2),
         "safety_clearance_loss_m2": round(safety_clearance_loss_m2, 2),
+        "shape_irregularity_loss_m2": round(shape_irregularity_loss_m2, 2),
         "usable_area_m2": round(usable_area_m2, 2),
         "usable_ratio": round(usable_ratio, 4),
+        "compactness_index": round(compactness_index, 4),
         "comfort_capacity": comfort_capacity,
         "safe_capacity": safe_capacity,
         "dense_capacity": dense_capacity,
@@ -185,28 +265,44 @@ def risk_status_advanced(value: int, model: Dict[str, float]) -> str:
     return "OVERCROWD"
 
 
-def evaluate_zone(coords: List[Dict[str, float]], current_count: int, predicted_count: int) -> Dict:
+def evaluate_zone(
+    coords: List[Dict[str, float]],
+    current_count: int,
+    predicted_count: int,
+    capacity_context: str = "mixed_urban",
+) -> Dict:
     area = polygon_area_m2(coords)
     perimeter = polygon_perimeter_m(coords)
     centroid = polygon_centroid(coords)
-    capacities = capacity_levels(area)
-    capacity_model = effective_capacity_model(area, perimeter)
+    capacity_model = effective_capacity_model(area, perimeter, capacity_context=capacity_context)
+    capacities = capacity_levels(area, capacity_model["usable_ratio"], capacity_model["density_profile_ppm2"])
+    gross_capacities = gross_capacity_levels(area)
 
     current_risk = risk_status_advanced(current_count, capacity_model)
     predicted_risk = risk_status_advanced(predicted_count, capacity_model)
     combined_value = max(current_count, predicted_count)
     overall_risk = risk_status_advanced(combined_value, capacity_model)
+    recommended = max(1, int(capacity_model["recommended_max_capacity"]))
+    occupancy_current_pct = round((int(current_count) / recommended) * 100.0, 2)
+    occupancy_predicted_pct = round((int(predicted_count) / recommended) * 100.0, 2)
 
     return {
         "area_m2": round(area, 2),
         "perimeter_m": round(perimeter, 2),
         "capacities": capacities,
+        "gross_capacities": gross_capacities,
         "capacity_model": capacity_model,
         "current_count": int(current_count),
         "predicted_count": int(predicted_count),
         "current_risk": current_risk,
         "predicted_risk": predicted_risk,
         "overall_risk": overall_risk,
+        "occupancy": {
+            "recommended_max_capacity": recommended,
+            "current_pct_of_recommended": occupancy_current_pct,
+            "predicted_pct_of_recommended": occupancy_predicted_pct,
+            "predicted_overflow_count": max(0, int(predicted_count) - recommended),
+        },
         "centroid": {
             "lat": round(centroid["lat"], 7),
             "lng": round(centroid["lng"], 7),

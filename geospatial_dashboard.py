@@ -110,8 +110,9 @@ def _call_nominatim_search(query: str, limit: int = 5) -> Dict[str, Any]:
     params = {
         "q": query,
         "format": "jsonv2",
-        "limit": max(1, min(limit, 10)),
+        "limit": max(1, min(limit, 25)),
         "addressdetails": 1,
+        "dedupe": 0,
     }
     try:
         response = requests.get(NOMINATIM_SEARCH_URL, params=params, timeout=HTTP_TIMEOUT_SEC, headers=_headers())
@@ -170,17 +171,16 @@ def api_geospatial_evaluate():
     if len(coords) < 3:
         return jsonify({"error": "At least 3 coordinates are required."}), 400
 
-    current_count = payload.get("current_count")
-    predicted_count = payload.get("predicted_count")
+    current_count = payload.get("current_count", 0)
+    predicted_count = payload.get("predicted_count", 0)
+    capacity_context = str(payload.get("capacity_context", "mixed_urban")).strip().lower()
 
-    if current_count is None or predicted_count is None:
-        latest = load_latest_ai_prediction(PREDICTION_LOG_PATH)
-        if latest is None:
-            return jsonify({"error": "No AI data available. Provide current_count and predicted_count."}), 400
-        current_count = latest["current_count"]
-        predicted_count = latest["future_count"]
-
-    result = evaluate_zone(coords, int(current_count), int(predicted_count))
+    result = evaluate_zone(
+        coords,
+        int(current_count),
+        int(predicted_count),
+        capacity_context=capacity_context,
+    )
     return jsonify(result)
 
 
@@ -188,6 +188,10 @@ def api_geospatial_evaluate():
 def api_geocode():
     payload = request.get_json(force=True, silent=True) or {}
     query = str(payload.get("query", "")).strip()
+    autocomplete_mode = bool(payload.get("autocomplete", False))
+    default_limit = 12 if autocomplete_mode else 5
+    limit = int(payload.get("limit", default_limit) or default_limit)
+    limit = max(1, min(limit, 25))
     if not query:
         return jsonify({"error": "query is required."}), 400
 
@@ -200,18 +204,24 @@ def api_geocode():
         if not results:
             return jsonify({"status": "ZERO_RESULTS", "results": []})
 
-        top = results[0]
-        location = top.get("geometry", {}).get("location", {})
-        return jsonify({
-            "status": "OK",
-            "results": [{
-                "display_name": top.get("formatted_address", "Unknown"),
+        mapped_results = []
+        for item in results[:limit]:
+            location = item.get("geometry", {}).get("location", {})
+            mapped_results.append({
+                "display_name": item.get("formatted_address", "Unknown"),
                 "lat": location.get("lat"),
                 "lng": location.get("lng"),
-            }],
+            })
+
+        if not mapped_results:
+            return jsonify({"status": "ZERO_RESULTS", "results": []})
+
+        return jsonify({
+            "status": "OK",
+            "results": mapped_results,
         })
 
-    api_result = _call_nominatim_search(query=query, limit=5)
+    api_result = _call_nominatim_search(query=query, limit=limit)
     if not api_result["ok"]:
         return jsonify({"error": api_result["error"]}), 400
 
@@ -275,20 +285,43 @@ def api_reverse_geocode():
     })
 
 
-def _overpass_filter(place_type: str, keyword: str) -> str:
+def _overpass_filter(place_type: str, keyword: str) -> List[str]:
     key = place_type.strip().lower()
     mapping = {
-        "hospital": 'node["amenity"="hospital"]',
-        "police": 'node["amenity"="police"]',
-        "school": 'node["amenity"="school"]',
-        "shopping_mall": 'node["shop"="mall"]',
-        "transit_station": 'node["public_transport"]',
+        "hospital": ['["amenity"="hospital"]'],
+        "police": ['["amenity"="police"]'],
+        "school": ['["amenity"="school"]'],
+        "shopping_mall": ['["shop"="mall"]', '["building"="retail"]'],
+        "transit_station": ['["public_transport"]', '["railway"="station"]', '["highway"="bus_stop"]'],
     }
-    selector = mapping.get(key, 'node["amenity"]')
+    selector_parts = mapping.get(key, ['["amenity"]'])
     if keyword.strip():
         escaped = keyword.strip().replace('"', "")
-        selector = f'{selector}["name"~"{escaped}",i]'
-    return selector
+        selector_parts = [f'{selector}["name"~"{escaped}",i]' for selector in selector_parts]
+
+    selectors: List[str] = []
+    for selector in selector_parts:
+        selectors.append(f"node{selector}")
+        selectors.append(f"way{selector}")
+        selectors.append(f"relation{selector}")
+    return selectors
+
+
+def _build_overpass_query(selectors: List[str], radius: int, centroid: Dict[str, float]) -> str:
+    body = "".join(
+        f"{selector}(around:{radius},{centroid['lat']},{centroid['lng']});" for selector in selectors
+    )
+    return f"[out:json][timeout:25];({body});out center 60;"
+
+
+def _extract_overpass_location(item: Dict[str, Any]) -> Dict[str, Any]:
+    lat = item.get("lat")
+    lng = item.get("lon")
+    if lat is None or lng is None:
+        center = item.get("center", {})
+        lat = center.get("lat")
+        lng = center.get("lon")
+    return {"lat": lat, "lng": lng}
 
 
 @app.route("/api/geospatial/nearby-places", methods=["POST"])
@@ -335,38 +368,46 @@ def api_nearby_places():
                 "place_id": item.get("place_id"),
             })
     else:
-        selector = _overpass_filter(place_type, keyword)
-        query = (
-            "[out:json][timeout:25];"
-            f"({selector}(around:{radius},{centroid['lat']},{centroid['lng']}););"
-            "out body 15;"
-        )
-        try:
-            response = requests.get(
-                OVERPASS_URL,
-                params={"data": query},
-                timeout=HTTP_TIMEOUT_SEC,
-                headers=_headers(),
-            )
-            response.raise_for_status()
-            payload_data = response.json()
-        except requests.RequestException as exc:
-            return jsonify({"error": f"Overpass nearby search failed: {exc}"}), 400
+        selectors = _overpass_filter(place_type, keyword)
+        candidate_radii = [radius, min(20000, max(radius * 2, 500)), min(20000, max(radius * 4, 1000))]
+        payload_data = {"elements": []}
+        last_error = None
+        for candidate_radius in candidate_radii:
+            query = _build_overpass_query(selectors, candidate_radius, centroid)
+            try:
+                response = requests.get(
+                    OVERPASS_URL,
+                    params={"data": query},
+                    timeout=HTTP_TIMEOUT_SEC,
+                    headers=_headers(),
+                )
+                response.raise_for_status()
+                payload_data = response.json()
+            except requests.RequestException as exc:
+                last_error = exc
+                continue
+
+            if payload_data.get("elements"):
+                radius = candidate_radius
+                break
+
+        if not payload_data.get("elements") and last_error is not None:
+            return jsonify({"error": f"Overpass nearby search failed: {last_error}"}), 400
 
         elements = payload_data.get("elements", [])
         places = []
         for item in elements[:10]:
             tags = item.get("tags", {})
+            location = _extract_overpass_location(item)
+            if location["lat"] is None or location["lng"] is None:
+                continue
             places.append({
                 "name": tags.get("name", "Unnamed Place"),
                 "vicinity": tags.get("addr:full", tags.get("addr:street", "Unknown vicinity")),
                 "rating": None,
                 "user_ratings_total": None,
                 "types": [tags.get("amenity", tags.get("public_transport", "osm_place"))],
-                "location": {
-                    "lat": item.get("lat"),
-                    "lng": item.get("lon"),
-                },
+                "location": location,
                 "place_id": str(item.get("id")),
             })
 

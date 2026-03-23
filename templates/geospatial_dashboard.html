@@ -7,20 +7,47 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
   <style>
-    body { font-family: Segoe UI, Tahoma, Arial, sans-serif; margin: 0; background: #f3f5f9; color: #1a2230; }
-    header { background: #101827; color: #f8fafc; padding: 14px 18px; }
-    .wrap { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; padding: 12px; }
-    #map { width: 100%; height: 78vh; border: 2px solid #111827; border-radius: 10px; }
-    .panel { background: #ffffff; border: 1px solid #dbe2ee; border-radius: 10px; padding: 12px; }
+    body {
+      font-family: "IBM Plex Sans", "Segoe UI", Tahoma, Arial, sans-serif;
+      margin: 0;
+      background:
+        radial-gradient(circle at 85% 8%, rgba(74, 222, 128, 0.18), transparent 28%),
+        linear-gradient(180deg, #f6f8fc 0%, #ecf2fb 100%);
+      color: #1a2230;
+    }
+    header {
+      background: linear-gradient(120deg, #0c1730 0%, #112f42 55%, #155e75 100%);
+      color: #f8fafc;
+      padding: 14px 18px;
+      border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+    }
+    .wrap { display: grid; grid-template-columns: minmax(640px, 2fr) minmax(320px, 1fr); gap: 12px; padding: 12px; }
+    #map {
+      width: 100%;
+      height: 78vh;
+      border: 2px solid #111827;
+      border-radius: 12px;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24);
+    }
+    .panel {
+      background: #ffffff;
+      border: 1px solid #dbe2ee;
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+    }
     .row { margin-bottom: 10px; }
     .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .kpi { background: #0f172a; color: #f8fafc; border-radius: 8px; padding: 8px; }
     .kpi .label { font-size: 12px; opacity: 0.85; }
     .kpi .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+    .search-wrap { position: relative; }
+    label { display: block; margin-bottom: 6px; font-size: 12px; color: #526076; font-weight: 700; letter-spacing: 0.02em; }
     input[type="text"] { width: 100%; padding: 8px; border: 1px solid #b8c2d6; border-radius: 6px; }
     button { padding: 8px 10px; border: none; border-radius: 6px; background: #1d4ed8; color: #fff; cursor: pointer; }
     button.secondary { background: #475569; }
     .small { font-size: 12px; color: #5f6b7a; }
+    .field-note { margin-top: 4px; font-size: 11px; color: #748297; }
     .risk { font-size: 20px; font-weight: 700; }
     .safe { color: #16a34a; }
     .medium { color: #ca8a04; }
@@ -28,9 +55,11 @@
     .very_high { color: #dc2626; }
     .over { color: #dc2626; }
     .list { max-height: 180px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; }
-    .list-item { padding: 6px 0; border-bottom: 1px solid #edf2f7; }
+    .list-item { padding: 8px 0; border-bottom: 1px solid #edf2f7; cursor: pointer; }
+    .list-item:hover { color: #0f3d8f; }
     .list-item:last-child { border-bottom: none; }
     .inline-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .triple-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
     select, input[type="number"] { width: 100%; padding: 8px; border: 1px solid #b8c2d6; border-radius: 6px; }
     .leaflet-control-zoom a { width: 34px !important; height: 34px !important; line-height: 34px !important; font-size: 18px !important; }
     .legend { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
@@ -40,130 +69,111 @@
     .b-high { background: #ea580c; }
     .b-veryhigh { background: #dc2626; }
     .b-over { background: #7f1d1d; }
+    .suggestions {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 4px);
+      border: 1px solid #d0dbe8;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+      max-height: 220px;
+      overflow-y: auto;
+      z-index: 900;
+      display: none;
+    }
+    .suggestion-item {
+      padding: 9px 10px;
+      border-bottom: 1px solid #eef2f8;
+      cursor: pointer;
+    }
+    .suggestion-item:hover { background: #f3f8ff; }
+    .suggestion-item:last-child { border-bottom: none; }
+    .coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+    .coord-cell { background: #f8fafc; border: 1px solid #e5eaf3; border-radius: 8px; padding: 8px; font-size: 12px; }
+    .meta-chip { display: inline-block; background: #e8eefb; color: #223659; font-weight: 700; border-radius: 999px; padding: 3px 8px; font-size: 11px; margin-top: 8px; }
+    @media (max-width: 1080px) {
+      .wrap { grid-template-columns: 1fr; }
+      #map { height: 56vh; }
+      .triple-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <header>
     <h2 style="margin:0;">Crowd Geospatial Intelligence Dashboard</h2>
-    <div class="small">Map -> Area Calculation -> Capacity Estimation -> AI Prediction -> Display</div>
+    <div class="small">Map -> Mark Zone -> Area by Latitude/Longitude -> People Capacity</div>
   </header>
 
   <div class="wrap">
     <div>
       <div class="row panel">
-        <div class="row">
-          <input id="placeSearch" type="text" placeholder="Search location (e.g., Chennai, Madurai)" />
+        <div class="row search-wrap">
+          <label for="placeSearch">Target Place Search</label>
+          <input id="placeSearch" type="text" placeholder="Type place name (example: Guduvanchery, Chennai, Madurai)" autocomplete="off" />
+          <div class="field-note">Type at least 3 letters to see suggestions and click one option to jump to that location.</div>
+          <div id="placeSuggestions" class="suggestions"></div>
         </div>
         <div class="row">
-          <input id="originSearch" type="text" placeholder="Origin for directions (e.g., nearest station/hospital)" />
-        </div>
-        <div class="row">
-          <button id="btnRefreshAI">Refresh AI Data</button>
-          <button id="btnEvaluate" class="secondary">Evaluate Selected Zone</button>
-          <button id="btnNearby">Nearby Places</button>
-          <button id="btnDirections" class="secondary">Get Directions</button>
+          <button id="btnEvaluate">Calculate Capacity</button>
         </div>
         <div class="row inline-grid">
           <div>
-            <label class="small" for="nearbyType">Nearby Type</label>
-            <select id="nearbyType">
-              <option value="transit_station">Transit Station</option>
-              <option value="hospital">Hospital</option>
-              <option value="police">Police</option>
-              <option value="school">School</option>
-              <option value="shopping_mall">Shopping Mall</option>
-            </select>
+            <label class="small" for="autoZoneSize">Auto Zone Side (m)</label>
+            <input id="autoZoneSize" type="number" value="35" min="10" max="500" />
           </div>
-          <div>
-            <label class="small" for="nearbyRadius">Radius (m)</label>
-            <input id="nearbyRadius" type="number" value="300" min="50" max="50000" />
-          </div>
-        </div>
-        <div class="row inline-grid">
           <div>
             <label class="small" for="mapTheme">Map Theme</label>
             <select id="mapTheme">
-              <option value="bright">Bright Day</option>
-              <option value="street" selected>Street</option>
+                <option value="bright" selected>Bright Day</option>
+                <option value="street">Street</option>
               <option value="satellite">Satellite</option>
             </select>
           </div>
-          <div>
-            <label class="small" for="travelMode">Travel Mode</label>
-            <select id="travelMode">
-              <option value="walking">Walking</option>
-              <option value="driving">Driving</option>
-              <option value="bicycling">Bicycling</option>
-              <option value="transit">Transit</option>
-            </select>
-          </div>
-          <div>
-            <label class="small" for="nearbyKeyword">Keyword (optional)</label>
-            <input id="nearbyKeyword" type="text" placeholder="exit, metro, gate" />
-          </div>
         </div>
-        <div class="small">Use map draw tools to draw polygon or rectangle around your target area.</div>
+        <div class="panel" style="margin-top: 8px;">
+          <div style="font-weight:700; font-size:13px; margin-bottom:6px;">Example Inputs</div>
+          <div class="small">1. Place Search: Guduvanchery bus stand</div>
+          <div class="small">2. Auto Zone Side: 25 (small street block), 40 (medium block), 60 (open ground)</div>
+          <div class="small">3. Draw rectangle/polygon exactly on usable walking area for accurate capacity.</div>
+        </div>
+        <div class="small" style="margin-top:8px;">Capacity is calculated from your marked zone only. No crowd prediction is used.</div>
       </div>
       <div id="map"></div>
     </div>
 
     <div>
       <div class="panel row">
-        <h3 style="margin: 0 0 8px 0;">AI Inputs (From Existing Model)</h3>
-        <div>Current Count: <strong id="aiCurrent">-</strong></div>
-        <div>Predicted Count: <strong id="aiPredicted">-</strong></div>
-        <div>Confidence: <strong id="aiConfidence">-</strong></div>
-        <div>Mode: <strong id="aiMode">-</strong></div>
-        <div>Status: <strong id="aiStatus">-</strong></div>
-        <div class="small" id="aiMessage"></div>
-      </div>
-
-      <div class="panel row">
         <h3 style="margin: 0 0 8px 0;">Geospatial Output</h3>
         <div>Area (m2): <strong id="areaOut">-</strong></div>
         <div>Perimeter (m): <strong id="perimeterOut">-</strong></div>
         <div>Zone Centroid: <strong id="zoneCentroid">-</strong></div>
         <div>Zone Address: <strong id="zoneAddress">-</strong></div>
+        <div>Coordinates Used: <strong id="coordinatesCount">-</strong></div>
+      </div>
+
+      <div class="panel row">
+        <h3 style="margin: 0 0 8px 0;">Selected Location Intelligence</h3>
+        <div>Selection Source: <strong id="selectionSource">-</strong></div>
+        <div>Selected Latitude: <strong id="selectedLat">-</strong></div>
+        <div>Selected Longitude: <strong id="selectedLng">-</strong></div>
+        <div>Auto Zone Side: <strong id="selectedZoneSide">-</strong></div>
+        <div>Updated At: <strong id="selectionUpdatedAt">-</strong></div>
       </div>
 
       <div class="panel row">
         <h3 style="margin: 0 0 8px 0;">Capacity Estimation</h3>
         <div class="kpi-grid">
-          <div class="kpi"><div class="label">Low (1/m2)</div><div class="value" id="capLow">-</div></div>
-          <div class="kpi"><div class="label">Safe (2/m2)</div><div class="value" id="capSafe">-</div></div>
-          <div class="kpi"><div class="label">Max (4/m2)</div><div class="value" id="capMax">-</div></div>
-          <div class="kpi"><div class="label">Predicted Crowd</div><div class="value" id="capPred">-</div></div>
+          <div class="kpi"><div class="label">Comfort Capacity</div><div class="value" id="capLow">-</div></div>
+          <div class="kpi"><div class="label">Safe Capacity (Recommended)</div><div class="value" id="capSafe">-</div></div>
+          <div class="kpi"><div class="label">Upper Dense Capacity</div><div class="value" id="capMax">-</div></div>
+          <div class="kpi"><div class="label">Area Per Person (Safe)</div><div class="value" id="capAreaPerPerson">-</div></div>
         </div>
-        <div class="small" style="margin-top:8px;">Recommended Max Capacity: <strong id="recommendedMax">-</strong></div>
+        <div class="small" style="margin-top:8px;">Recommended People Limit: <strong id="recommendedMax">-</strong></div>
         <div class="small">Usable Area: <strong id="usableArea">-</strong> m2 (<strong id="usableRatio">-</strong>)</div>
-      </div>
-
-      <div class="panel row">
-        <h3 style="margin: 0 0 8px 0;">Risk Assessment</h3>
-        <div>Current Risk: <strong id="riskCurrent">-</strong></div>
-        <div>Predicted Risk: <strong id="riskPredicted">-</strong></div>
-        <div class="risk" id="riskOverall">-</div>
-        <div class="legend">
-          <span class="badge b-safe">SAFE</span>
-          <span class="badge b-medium">MEDIUM</span>
-          <span class="badge b-high">HIGH</span>
-          <span class="badge b-veryhigh">VERY_HIGH</span>
-          <span class="badge b-over">OVERCROWD</span>
-        </div>
-      </div>
-
-      <div class="panel row">
-        <h3 style="margin: 0 0 8px 0;">Directions Intelligence</h3>
-        <div>Distance: <strong id="dirDistance">-</strong></div>
-        <div>Duration: <strong id="dirDuration">-</strong></div>
-        <div>From: <strong id="dirStart">-</strong></div>
-        <div>To: <strong id="dirEnd">-</strong></div>
-      </div>
-
-      <div class="panel row">
-        <h3 style="margin: 0 0 8px 0;">Nearby Critical Places</h3>
-        <div class="small" id="nearbyMeta">No nearby places loaded.</div>
-        <div id="nearbyList" class="list"></div>
+        <div class="small">Gross Reference (1x/2x/4x): <strong id="grossCapacity">-</strong></div>
+        <div class="meta-chip" id="capacityTrust">Capacity model: waiting for evaluation</div>
       </div>
 
       <div class="panel row">
@@ -180,28 +190,14 @@
     let selectedLayer = null;
     let drawnItems;
     let centroidMarker = null;
-    let routeLine = null;
-    let nearbyMarkers = [];
     let baseLayers = {};
     let activeBaseLayer = null;
     let selectedCoordinates = [];
-    let aiData = null;
-
-    function riskClass(risk) {
-      if (risk === "SAFE") return "safe";
-      if (risk === "MEDIUM") return "medium";
-      if (risk === "HIGH") return "high";
-      if (risk === "VERY_HIGH") return "very_high";
-      return "over";
-    }
-
-    function riskFillColor(risk) {
-      if (risk === 'SAFE') return '#22c55e';
-      if (risk === 'MEDIUM') return '#f59e0b';
-      if (risk === 'HIGH') return '#f97316';
-      if (risk === 'VERY_HIGH') return '#ef4444';
-      return '#7f1d1d';
-    }
+    let evaluateController = null;
+    let reverseGeocodeController = null;
+    let reverseGeocodeTimer = null;
+    let isDrawingShape = false;
+    let suppressMapClickUntil = 0;
 
     function clearShape() {
       if (selectedLayer) {
@@ -213,10 +209,83 @@
         map.removeLayer(centroidMarker);
         centroidMarker = null;
       }
-      if (routeLine) {
-        map.removeLayer(routeLine);
-        routeLine = null;
+    }
+
+    function nowTimeString() {
+      return new Date().toLocaleTimeString();
+    }
+
+    function getAutoZoneSideMeters(centerLat) {
+      const configured = Number(document.getElementById('autoZoneSize').value || 80);
+      return Math.min(500, Math.max(10, configured));
+    }
+
+    function setSelectionMeta(source, lat, lng, zoneSide) {
+      document.getElementById('selectionSource').textContent = source || '-';
+      document.getElementById('selectedLat').textContent = Number.isFinite(lat) ? lat.toFixed(6) : '-';
+      document.getElementById('selectedLng').textContent = Number.isFinite(lng) ? lng.toFixed(6) : '-';
+      document.getElementById('selectedZoneSide').textContent = Number.isFinite(zoneSide) ? zoneSide.toFixed(1) + ' m' : '-';
+      document.getElementById('selectionUpdatedAt').textContent = nowTimeString();
+    }
+
+    function createSquareCoordinates(centerLat, centerLng, sideMeters) {
+      const half = sideMeters / 2;
+      const latDelta = half / 111320;
+      const safeCos = Math.max(0.15, Math.cos(centerLat * Math.PI / 180));
+      const lngDelta = half / (111320 * safeCos);
+      return [
+        { lat: centerLat + latDelta, lng: centerLng - lngDelta },
+        { lat: centerLat + latDelta, lng: centerLng + lngDelta },
+        { lat: centerLat - latDelta, lng: centerLng + lngDelta },
+        { lat: centerLat - latDelta, lng: centerLng - lngDelta },
+      ];
+    }
+
+    async function applyAutoZoneFromPoint(lat, lng, source, fitView = false) {
+      const side = getAutoZoneSideMeters(lat);
+      const coords = createSquareCoordinates(lat, lng, side);
+
+      clearShape();
+      selectedLayer = L.polygon(coords.map((p) => [p.lat, p.lng]), {
+        color: '#2563eb',
+        fillColor: '#2563eb',
+        fillOpacity: 0.25,
+        weight: 2,
+      });
+      drawnItems.addLayer(selectedLayer);
+      selectedCoordinates = coords;
+      setSelectionMeta(source, lat, lng, side);
+      if (fitView) {
+        map.fitBounds(selectedLayer.getBounds().pad(0.25));
       }
+      await evaluateSelectedZone(true);
+    }
+
+    function scheduleZoneAddressLookup(coords) {
+      if (reverseGeocodeTimer) {
+        clearTimeout(reverseGeocodeTimer);
+      }
+      reverseGeocodeTimer = setTimeout(() => {
+        loadZoneAddress(coords);
+      }, 220);
+    }
+
+    function shouldIgnoreMapClick(event) {
+      const now = Date.now();
+      if (isDrawingShape || now < suppressMapClickUntil) {
+        return true;
+      }
+
+      const target = event && event.originalEvent ? event.originalEvent.target : null;
+      if (!target || typeof target.closest !== 'function') {
+        return false;
+      }
+
+      if (target.closest('.leaflet-control') || target.closest('.leaflet-draw-toolbar')) {
+        return true;
+      }
+
+      return false;
     }
 
     function shapeToCoordinates(layer) {
@@ -268,6 +337,78 @@
       return data.results[0];
     }
 
+    async function geocodeSuggestions(query) {
+      const res = await fetch('/api/geospatial/geocode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, limit: 20, autocomplete: true })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Suggestion search failed');
+      }
+      return data.results || [];
+    }
+
+    function clearSuggestions(containerId) {
+      const node = document.getElementById(containerId);
+      node.innerHTML = '';
+      node.style.display = 'none';
+    }
+
+    function renderSuggestions(containerId, results, onPick) {
+      const node = document.getElementById(containerId);
+      node.innerHTML = '';
+      if (!results.length) {
+        node.style.display = 'none';
+        return;
+      }
+
+      results.forEach((item) => {
+        const option = document.createElement('div');
+        option.className = 'suggestion-item';
+        option.textContent = item.display_name;
+        option.addEventListener('mousedown', () => onPick(item));
+        node.appendChild(option);
+      });
+      node.style.display = 'block';
+    }
+
+    function debounce(fn, waitMs) {
+      let timer = null;
+      return (...args) => {
+        if (timer) {
+          clearTimeout(timer);
+        }
+        timer = setTimeout(() => fn(...args), waitMs);
+      };
+    }
+
+    function setupAutocomplete(inputId, listId, onPick) {
+      const input = document.getElementById(inputId);
+      const run = debounce(async () => {
+        const query = input.value.trim();
+        if (query.length < 2) {
+          clearSuggestions(listId);
+          return;
+        }
+
+        try {
+          const results = await geocodeSuggestions(query);
+          renderSuggestions(listId, results, (item) => {
+            input.value = item.display_name;
+            clearSuggestions(listId);
+            onPick(item);
+          });
+        } catch (_err) {
+          clearSuggestions(listId);
+        }
+      }, 260);
+
+      input.addEventListener('input', run);
+      input.addEventListener('blur', () => setTimeout(() => clearSuggestions(listId), 180));
+    }
+
     async function loadMapsHealth() {
       const res = await fetch('/api/maps/health');
       const data = await res.json();
@@ -276,164 +417,40 @@
     }
 
     async function loadZoneAddress(coords) {
-      const res = await fetch('/api/geospatial/reverse-geocode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ coordinates: coords })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        document.getElementById('zoneAddress').textContent = data.error || 'Address lookup failed';
-        return;
+      if (reverseGeocodeController) {
+        reverseGeocodeController.abort();
       }
-
-      const centroidText = data.centroid.lat.toFixed(6) + ', ' + data.centroid.lng.toFixed(6);
-      document.getElementById('zoneCentroid').textContent = centroidText;
-      document.getElementById('zoneAddress').textContent = data.formatted_address;
-      updateCentroidMarker(data.centroid);
-    }
-
-    async function loadNearbyPlaces() {
-      if (!selectedCoordinates.length) {
-        alert('Draw and evaluate a zone first.');
-        return;
-      }
-
-      const placeType = document.getElementById('nearbyType').value;
-      const radius = Number(document.getElementById('nearbyRadius').value || 300);
-      const keyword = document.getElementById('nearbyKeyword').value.trim();
-      const res = await fetch('/api/geospatial/nearby-places', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          coordinates: selectedCoordinates,
-          place_type: placeType,
-          radius_m: radius,
-          keyword: keyword,
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || 'Nearby places request failed');
-        return;
-      }
-
-      document.getElementById('nearbyMeta').textContent = 'Found ' + data.count + ' place(s) in ' + data.radius_m + 'm';
-      const list = document.getElementById('nearbyList');
-      list.innerHTML = '';
-      nearbyMarkers.forEach((m) => map.removeLayer(m));
-      nearbyMarkers = [];
-
-      if (!data.places.length) {
-        list.innerHTML = '<div class="list-item">No matching places found.</div>';
-        return;
-      }
-
-      data.places.forEach((p) => {
-        const div = document.createElement('div');
-        div.className = 'list-item';
-        const rating = p.rating ? (' | Rating: ' + p.rating) : '';
-        div.textContent = p.name + ' - ' + p.vicinity + rating;
-        list.appendChild(div);
-
-        if (p.location && p.location.lat && p.location.lng) {
-          const marker = L.marker([p.location.lat, p.location.lng]).addTo(map);
-          marker.bindPopup('<strong>' + p.name + '</strong><br/>' + p.vicinity);
-          nearbyMarkers.push(marker);
-        }
-      });
-
-      if (nearbyMarkers.length) {
-        const group = L.featureGroup(nearbyMarkers);
-        map.fitBounds(group.getBounds().pad(0.25));
-      }
-    }
-
-    async function loadDirections() {
-      if (!selectedCoordinates.length) {
-        alert('Draw and evaluate a zone first.');
-        return;
-      }
-
-      const originText = document.getElementById('originSearch').value.trim();
-      if (!originText) {
-        alert('Enter an origin location first.');
-        return;
-      }
-
-      let origin;
+      reverseGeocodeController = new AbortController();
       try {
-        const found = await geocodeAddress(originText);
-        origin = { lat: found.lat, lng: found.lng };
+        const res = await fetch('/api/geospatial/reverse-geocode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ coordinates: coords }),
+          signal: reverseGeocodeController.signal,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          document.getElementById('zoneAddress').textContent = data.error || 'Address lookup failed';
+          return;
+        }
+
+        const centroidText = data.centroid.lat.toFixed(6) + ', ' + data.centroid.lng.toFixed(6);
+        document.getElementById('zoneCentroid').textContent = centroidText;
+        document.getElementById('zoneAddress').textContent = data.formatted_address;
+        updateCentroidMarker(data.centroid);
       } catch (error) {
-        alert(error.message || 'Could not geocode origin address');
-        return;
-      }
-
-      const mode = document.getElementById('travelMode').value;
-      const res = await fetch('/api/geospatial/directions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          coordinates: selectedCoordinates,
-          origin,
-          mode,
-        })
-      });
-      const data = await res.json();
-      if (!res.ok || data.status !== 'OK') {
-        alert((data && data.error) || 'Directions lookup failed');
-        return;
-      }
-
-      document.getElementById('dirDistance').textContent = data.distance_text;
-      document.getElementById('dirDuration').textContent = data.duration_text;
-      document.getElementById('dirStart').textContent = data.start_address;
-      document.getElementById('dirEnd').textContent = data.end_address;
-
-      if (routeLine) {
-        map.removeLayer(routeLine);
-      }
-      if (data.route_geometry && data.route_geometry.length) {
-        const points = data.route_geometry.map((p) => [p.lat, p.lng]);
-        routeLine = L.polyline(points, { color: '#f43f5e', weight: 4 }).addTo(map);
-      } else {
-        routeLine = L.polyline([
-          [origin.lat, origin.lng],
-          [data.destination.lat, data.destination.lng],
-        ], { color: '#f43f5e', weight: 4 }).addTo(map);
+        if (error && error.name === 'AbortError') {
+          return;
+        }
+        document.getElementById('zoneAddress').textContent = 'Address lookup failed';
       }
     }
 
-    async function refreshAI() {
-      const res = await fetch('/api/ai/latest');
-      const data = await res.json();
-      const msg = document.getElementById('aiMessage');
-
-      if (!data.available) {
-        document.getElementById('aiCurrent').textContent = '-';
-        document.getElementById('aiPredicted').textContent = '-';
-        document.getElementById('aiConfidence').textContent = '-';
-        document.getElementById('aiMode').textContent = '-';
-        document.getElementById('aiStatus').textContent = '-';
-        msg.textContent = data.message || 'AI data unavailable';
-        aiData = null;
-        return;
-      }
-
-      aiData = data.ai;
-      document.getElementById('aiCurrent').textContent = aiData.current_count;
-      document.getElementById('aiPredicted').textContent = aiData.future_count;
-      document.getElementById('aiConfidence').textContent = aiData.confidence_percent + '%';
-      document.getElementById('aiMode').textContent = aiData.prediction_mode;
-      document.getElementById('aiStatus').textContent = aiData.status;
-      msg.textContent = 'Latest row from prediction_output_log.csv';
-    }
-
-    async function evaluateSelectedZone() {
+    async function evaluateSelectedZone(silentMode = false) {
       if (!selectedLayer) {
-        alert('Draw a polygon or rectangle first.');
+        if (!silentMode) {
+          alert('Draw a polygon or rectangle first.');
+        }
         return;
       }
 
@@ -445,25 +462,42 @@
 
       const payload = { coordinates: coords };
       selectedCoordinates = coords;
-      if (aiData) {
-        payload.current_count = aiData.current_count;
-        payload.predicted_count = aiData.future_count;
+
+      if (evaluateController) {
+        evaluateController.abort();
+      }
+      evaluateController = new AbortController();
+
+      let res;
+      let data;
+      try {
+        res = await fetch('/api/geospatial/evaluate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: evaluateController.signal,
+        });
+        data = await res.json();
+      } catch (error) {
+        if (error && error.name === 'AbortError') {
+          return;
+        }
+        if (!silentMode) {
+          alert('Failed to evaluate zone');
+        }
+        return;
       }
 
-      const res = await fetch('/api/geospatial/evaluate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
       if (!res.ok) {
-        alert(data.error || 'Failed to evaluate zone');
+        if (!silentMode) {
+          alert(data.error || 'Failed to evaluate zone');
+        }
         return;
       }
 
       document.getElementById('areaOut').textContent = data.area_m2;
       document.getElementById('perimeterOut').textContent = data.perimeter_m;
+      document.getElementById('coordinatesCount').textContent = data.coordinates_count || coords.length;
       if (data.centroid) {
         document.getElementById('zoneCentroid').textContent = data.centroid.lat.toFixed(6) + ', ' + data.centroid.lng.toFixed(6);
         updateCentroidMarker(data.centroid);
@@ -471,30 +505,33 @@
       document.getElementById('capLow').textContent = data.capacities.low_density_capacity;
       document.getElementById('capSafe').textContent = data.capacities.safe_capacity;
       document.getElementById('capMax').textContent = data.capacities.maximum_capacity;
-      document.getElementById('capPred').textContent = data.predicted_count;
 
       if (data.capacity_model) {
         document.getElementById('recommendedMax').textContent = data.capacity_model.recommended_max_capacity;
         document.getElementById('usableArea').textContent = data.capacity_model.usable_area_m2;
         document.getElementById('usableRatio').textContent = (data.capacity_model.usable_ratio * 100).toFixed(1) + '%';
+        const contextLabel = data.capacity_model.capacity_context_label || 'Mixed Urban';
+        document.getElementById('capacityTrust').textContent = 'Capacity model: ' + contextLabel + ' context with usable-area safety deductions';
+        const safeCapacity = Number(data.capacity_model.safe_capacity || 0);
+        const usableArea = Number(data.capacity_model.usable_area_m2 || 0);
+        const areaPerPerson = safeCapacity > 0 ? (usableArea / safeCapacity).toFixed(2) + ' m2' : '-';
+        document.getElementById('capAreaPerPerson').textContent = areaPerPerson;
       }
 
-      document.getElementById('riskCurrent').textContent = data.current_risk;
-      document.getElementById('riskPredicted').textContent = data.predicted_risk;
-      const overall = document.getElementById('riskOverall');
-      overall.textContent = 'Overall Risk: ' + data.overall_risk;
-      overall.className = 'risk ' + riskClass(data.overall_risk);
+      if (data.gross_capacities) {
+        document.getElementById('grossCapacity').textContent = data.gross_capacities.low_density_capacity + ' / ' + data.gross_capacities.safe_capacity + ' / ' + data.gross_capacities.maximum_capacity;
+      }
 
       if (selectedLayer && selectedLayer.setStyle) {
         selectedLayer.setStyle({
-          color: riskFillColor(data.overall_risk),
-          fillColor: riskFillColor(data.overall_risk),
+          color: '#22c55e',
+          fillColor: '#22c55e',
           fillOpacity: 0.35,
           weight: 3,
         });
       }
 
-      await loadZoneAddress(coords);
+      scheduleZoneAddressLookup(coords);
     }
 
     async function focusSearchLocation() {
@@ -505,28 +542,45 @@
       try {
         const result = await geocodeAddress(query);
         map.setView([result.lat, result.lng], 14);
+        await applyAutoZoneFromPoint(result.lat, result.lng, 'Manual place search', true);
       } catch (error) {
         alert(error.message || 'Location search failed');
       }
     }
 
     function initMap() {
-      map = L.map('map').setView([20.5937, 78.9629], 5);
+      map = L.map('map', {
+        preferCanvas: true,
+        zoomControl: true,
+        maxZoom: 22,
+      }).setView([20.5937, 78.9629], 5);
 
       baseLayers.bright = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        maxZoom: 20,
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+        maxNativeZoom: 20,
+        maxZoom: 22,
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        updateWhenIdle: true,
+        keepBuffer: 2,
+        detectRetina: false,
       });
       baseLayers.street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
+        maxNativeZoom: 19,
+        maxZoom: 22,
+        attribution: '&copy; OpenStreetMap contributors',
+        updateWhenIdle: true,
+        keepBuffer: 2,
+        detectRetina: false,
       });
       baseLayers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 19,
-        attribution: 'Tiles &copy; Esri'
+        maxNativeZoom: 19,
+        maxZoom: 22,
+        attribution: 'Tiles &copy; Esri',
+        updateWhenIdle: true,
+        keepBuffer: 2,
+        detectRetina: false,
       });
 
-      activeBaseLayer = baseLayers.street;
+      activeBaseLayer = baseLayers.bright;
       activeBaseLayer.addTo(map);
 
       document.getElementById('mapTheme').addEventListener('change', (event) => {
@@ -559,17 +613,37 @@
       });
       map.addControl(drawControl);
 
+      map.on('draw:drawstart', () => {
+        isDrawingShape = true;
+      });
+
+      map.on('draw:drawstop', () => {
+        isDrawingShape = false;
+        suppressMapClickUntil = Date.now() + 500;
+      });
+
       map.on(L.Draw.Event.CREATED, (event) => {
         clearShape();
         selectedLayer = event.layer;
         drawnItems.addLayer(selectedLayer);
         selectedCoordinates = shapeToCoordinates(selectedLayer);
+        if (selectedCoordinates.length) {
+          setSelectionMeta('Manual draw', selectedCoordinates[0].lat, selectedCoordinates[0].lng, null);
+          evaluateSelectedZone(true);
+        }
+        suppressMapClickUntil = Date.now() + 700;
       });
 
-      document.getElementById('btnRefreshAI').addEventListener('click', refreshAI);
+      map.on('click', async (event) => {
+        if (shouldIgnoreMapClick(event)) {
+          return;
+        }
+        const lat = event.latlng.lat;
+        const lng = event.latlng.lng;
+        await applyAutoZoneFromPoint(lat, lng, 'Map click', false);
+      });
+
       document.getElementById('btnEvaluate').addEventListener('click', evaluateSelectedZone);
-      document.getElementById('btnNearby').addEventListener('click', loadNearbyPlaces);
-      document.getElementById('btnDirections').addEventListener('click', loadDirections);
       document.getElementById('placeSearch').addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
           event.preventDefault();
@@ -577,7 +651,10 @@
         }
       });
 
-      refreshAI();
+      setupAutocomplete('placeSearch', 'placeSuggestions', async (item) => {
+        map.setView([item.lat, item.lng], 15);
+        await applyAutoZoneFromPoint(item.lat, item.lng, 'Search suggestion', true);
+      });
       loadMapsHealth();
     }
 

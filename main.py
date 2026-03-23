@@ -26,7 +26,7 @@ from dashboard.visualization import (
 )
 from processing.tracker import SimpleTracker
 
-VIDEO_PATH = "data/crowd_videos/crowd2.mp4"
+VIDEO_PATH = "data/crowd_videos/crowd3.mp4"
 
 DISPLAY_SIZE = (1366, 768)
 DETECTION_INTERVAL = 2
