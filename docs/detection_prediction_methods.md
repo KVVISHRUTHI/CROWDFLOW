@@ -9,9 +9,10 @@ The current runtime pipeline is:
 2. Detect persons with YOLO
 3. Track persons with ID persistence and re-identification
 4. Compute current crowd features (count, density, elapsed progress)
-5. Predict future crowd with trained neural network
-6. Apply alert gating to reduce false positives
-7. Render overlays and write prediction logs
+5. Compute action and crowd-attribute features from tracking behavior
+6. Predict future crowd with trained neural network
+7. Apply alert gating to reduce false positives
+8. Render overlays and write prediction logs
 
 ### Quick Architecture Diagram
 
@@ -109,8 +110,18 @@ The NN uses a context window with:
 1. Recent crowd count sequence
 2. Recent density sequence
 3. Elapsed video ratio feature
+4. Current action feature vector
+5. Current crowd-attribute feature vector
 
-This gives temporal + spatial context to prediction.
+This gives temporal + spatial + behavior context to prediction.
+
+### 4.2.1 Count Signal Update
+The current count series is built from a fused signal:
+- tracker-confirmed count
+- detector box count
+- coverage-aware blending
+
+This reduces undercount during longer gaps/occlusions where tracker confirmations may lag.
 
 ### 4.3 Model
 - Library: scikit-learn

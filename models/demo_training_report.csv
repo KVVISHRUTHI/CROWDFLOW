@@ -1,6 +1,0 @@
-video_path,samples,count_min,count_max,count_mean,density_mean,elapsed_start,elapsed_end
-data/crowd_videos/demo_training\demo_clip_01.mp4,30,10,27,17.3,0.691955,0.033333,1.0
-data/crowd_videos/demo_training\demo_clip_02.mp4,30,8,27,16.967,0.692814,0.033333,1.0
-data/crowd_videos/demo_training\demo_clip_03.mp4,30,5,25,14.067,0.546315,0.033333,1.0
-data/crowd_videos/demo_training\demo_clip_04.mp4,30,11,21,15.0,0.307074,0.033333,1.0
-data/crowd_videos/demo_training\demo_clip_05.mp4,30,9,16,12.8,0.436734,0.033333,1.0

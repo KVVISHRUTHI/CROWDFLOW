@@ -1,4 +1,11 @@
-# Demo-5 Training and Prediction Summary
+# Demo-5 Training and Prediction Summary (Legacy)
+
+This file is retained for historical reference.
+
+Current training/evaluation outputs for the 13-video run:
+- models/demo_training_results_summary.md
+- models/demo_model_evaluation.txt
+- models/demo_model_evaluation_summary.md
 
 ## Training Proof
 - Demo videos used: 5

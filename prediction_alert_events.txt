@@ -1,4 +1,3 @@
 frame,elapsed_percent,current_count,future_count,delta,confidence_percent,action_recommendation,gate_reason
-32,12.903,2,27,25,68.9,PREPARE,PASS
-104,41.935,1,33,32,76.6,INTERVENE,PASS
-152,61.290,2,30,28,64.8,PREPARE,PASS
+36,14.516,2,7,5,62.0,PREPARE,PASS
+60,24.194,2,5,3,63.8,PREPARE,PASS

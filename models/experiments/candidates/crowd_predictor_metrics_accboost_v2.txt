@@ -1,0 +1,15 @@
+samples: 8070
+train_samples: 6456
+val_samples: 1614
+mae: 0.725
+rmse: 1.083
+mape_percent: 42.955
+selection_score: 1.317
+best_config_name: agg_wider
+best_hidden_layers: 128-64
+best_alpha: 0.0007
+best_learning_rate_init: 0.0008
+best_max_iter: 1300
+candidate_count: 5
+shuffle_split: 1
+selection_leaderboard: [{'name': 'agg_balanced', 'hidden_layer_sizes': [96, 48], 'alpha': 0.0004, 'learning_rate_init': 0.001, 'max_iter': 1100, 'mae': 0.7618, 'rmse': 1.125, 'mape_percent': 46.1323, 'score': 1.3918}, {'name': 'agg_wider', 'hidden_layer_sizes': [128, 64], 'alpha': 0.0007, 'learning_rate_init': 0.0008, 'max_iter': 1300, 'mae': 0.7245, 'rmse': 1.0832, 'mape_percent': 42.9553, 'score': 1.3165}, {'name': 'agg_regularized', 'hidden_layer_sizes': [96, 64, 32], 'alpha': 0.0012, 'learning_rate_init': 0.0007, 'max_iter': 1400, 'mae': 0.7562, 'rmse': 1.0938, 'mape_percent': 46.8498, 'score': 1.3888}, {'name': 'agg_dense', 'hidden_layer_sizes': [160, 80], 'alpha': 0.0009, 'learning_rate_init': 0.0006, 'max_iter': 1500, 'mae': 0.7443, 'rmse': 1.0866, 'mape_percent': 45.6788, 'score': 1.3641}, {'name': 'agg_slim_highreg', 'hidden_layer_sizes': [80, 40], 'alpha': 0.0018, 'learning_rate_init': 0.0012, 'max_iter': 1000, 'mae': 0.7517, 'rmse': 1.1147, 'mape_percent': 45.4302, 'score': 1.3732}]

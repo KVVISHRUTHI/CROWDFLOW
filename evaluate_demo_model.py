@@ -1,6 +1,7 @@
 import json
 import os
-from typing import Dict, List
+import argparse
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -19,7 +20,14 @@ def _rmse(y_true: List[int], y_pred: List[int]) -> float:
     return float(np.sqrt(np.mean((y_t - y_p) ** 2)))
 
 
-def evaluate_series(predictor: CrowdPredictor, counts: List[int], densities: List[float], elapsed: List[float]) -> Dict:
+def evaluate_series(
+    predictor: CrowdPredictor,
+    counts: List[int],
+    densities: List[float],
+    elapsed: List[float],
+    actions: Optional[Sequence[Sequence[float]]] = None,
+    attributes: Optional[Sequence[Sequence[float]]] = None,
+) -> Dict:
     window = predictor.window_size
     horizon = predictor.horizon_steps
 
@@ -37,7 +45,16 @@ def evaluate_series(predictor: CrowdPredictor, counts: List[int], densities: Lis
         current = counts[i]
         actual_future = counts[i + horizon]
 
-        pred_future = predictor.predict(hist_counts, hist_densities, elapsed[i])
+        action_features = actions[i] if actions is not None and i < len(actions) else None
+        attribute_features = attributes[i] if attributes is not None and i < len(attributes) else None
+
+        pred_future = predictor.predict(
+            hist_counts,
+            hist_densities,
+            elapsed[i],
+            action_features=action_features,
+            attribute_features=attribute_features,
+        )
 
         delta_true = actual_future - current
         delta_pred = pred_future - current
@@ -76,13 +93,23 @@ def evaluate_series(predictor: CrowdPredictor, counts: List[int], densities: Lis
 
 
 def main():
-    model_path = "models/crowd_predictor.joblib"
-    series_path = "models/demo_training_series.json"
+    parser = argparse.ArgumentParser(description="Evaluate a trained crowd predictor on archived demo series.")
+    parser.add_argument("--model-path", default="models/crowd_predictor.joblib")
+    parser.add_argument("--series-path", default="models/demo_training_series.json")
+    parser.add_argument(
+        "--output-prefix",
+        default="models/reports/current/demo_model_evaluation",
+        help="Output prefix without extension, for example models/demo_model_evaluation_candidate.",
+    )
+    args = parser.parse_args()
+
+    model_path = args.model_path
+    series_path = args.series_path
 
     if not os.path.exists(model_path):
-        raise RuntimeError("Missing trained model: models/crowd_predictor.joblib")
+        raise RuntimeError(f"Missing trained model: {model_path}")
     if not os.path.exists(series_path):
-        raise RuntimeError("Missing series archive: models/demo_training_series.json. Run training first.")
+        raise RuntimeError(f"Missing series archive: {series_path}. Run training first.")
 
     predictor = CrowdPredictor(model_path=model_path)
     if not predictor.is_trained():
@@ -102,6 +129,8 @@ def main():
             counts=[int(v) for v in s["counts"]],
             densities=[float(v) for v in s["densities"]],
             elapsed=[float(v) for v in s["elapsed"]],
+            actions=s.get("actions"),
+            attributes=s.get("attributes"),
         )
         metrics["video_index"] = idx
         per_video.append(metrics)
@@ -124,9 +153,11 @@ def main():
         "avg_incoming_accuracy_percent": avg("incoming_accuracy_percent"),
     }
 
-    out_json = "models/demo5_model_evaluation.json"
-    out_csv = "models/demo5_model_evaluation.csv"
-    out_txt = "models/demo5_model_evaluation.txt"
+    out_json = f"{args.output_prefix}.json"
+    out_csv = f"{args.output_prefix}.csv"
+    out_txt = f"{args.output_prefix}.txt"
+    out_md = f"{args.output_prefix}_summary.md"
+    os.makedirs(os.path.dirname(out_json) or ".", exist_ok=True)
 
     with open(out_json, "w", encoding="utf-8") as f:
         json.dump({"summary": summary, "per_video": per_video}, f, indent=2)
@@ -139,16 +170,32 @@ def main():
             )
 
     with open(out_txt, "w", encoding="utf-8") as f:
-        f.write("DEMO-5 MODEL EVALUATION\n")
-        f.write("=======================\n")
+        f.write("DEMO MODEL EVALUATION\n")
+        f.write("=====================\n")
         for k, v in summary.items():
             f.write(f"{k}: {v}\n")
+
+    with open(out_md, "w", encoding="utf-8") as f:
+        f.write("# Demo Model Evaluation Summary\n\n")
+        f.write(f"- Demo videos in archive: {summary.get('demo_video_count')}\n")
+        f.write(f"- Videos evaluated: {summary.get('videos_evaluated')}\n")
+        f.write(f"- Average MAE: {summary.get('avg_mae')}\n")
+        f.write(f"- Average RMSE: {summary.get('avg_rmse')}\n")
+        f.write(f"- Average MAPE%: {summary.get('avg_mape_percent')}\n")
+        f.write(f"- Avg incoming accuracy%: {summary.get('avg_incoming_accuracy_percent')}\n\n")
+        f.write("## Per Video\n\n")
+        for row in per_video:
+            f.write(
+                f"- Video {row['video_index']}: samples={row['samples']}, mae={row['mae']}, rmse={row['rmse']}, "
+                f"mape={row['mape_percent']}, incoming_acc={row['incoming_accuracy_percent']}\n"
+            )
 
     print("Evaluation completed.")
     print(f"Summary: {summary}")
     print(f"Saved: {out_json}")
     print(f"Saved: {out_csv}")
     print(f"Saved: {out_txt}")
+    print(f"Saved: {out_md}")
 
 
 if __name__ == "__main__":

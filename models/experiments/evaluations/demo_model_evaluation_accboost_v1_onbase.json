@@ -1,0 +1,119 @@
+{
+  "summary": {
+    "model_path": "models/crowd_predictor_accboost_v1.joblib",
+    "window_size": 24,
+    "horizon_steps": 15,
+    "demo_video_count": 13,
+    "videos_evaluated": 13,
+    "avg_mae": 2.875,
+    "avg_rmse": 3.366,
+    "avg_mape_percent": 45.07,
+    "avg_incoming_accuracy_percent": 73.179
+  },
+  "per_video": [
+    {
+      "samples": 111,
+      "mae": 7.649,
+      "rmse": 7.989,
+      "mape_percent": 48.882,
+      "incoming_accuracy_percent": 45.946,
+      "video_index": 1
+    },
+    {
+      "samples": 111,
+      "mae": 6.973,
+      "rmse": 7.448,
+      "mape_percent": 49.403,
+      "incoming_accuracy_percent": 53.153,
+      "video_index": 2
+    },
+    {
+      "samples": 111,
+      "mae": 5.838,
+      "rmse": 6.873,
+      "mape_percent": 55.594,
+      "incoming_accuracy_percent": 56.757,
+      "video_index": 3
+    },
+    {
+      "samples": 111,
+      "mae": 2.387,
+      "rmse": 2.933,
+      "mape_percent": 17.331,
+      "incoming_accuracy_percent": 63.063,
+      "video_index": 4
+    },
+    {
+      "samples": 111,
+      "mae": 1.748,
+      "rmse": 2.23,
+      "mape_percent": 15.284,
+      "incoming_accuracy_percent": 72.973,
+      "video_index": 5
+    },
+    {
+      "samples": 72,
+      "mae": 0.875,
+      "rmse": 1.161,
+      "mape_percent": 77.5,
+      "incoming_accuracy_percent": 91.667,
+      "video_index": 6
+    },
+    {
+      "samples": 36,
+      "mae": 3.556,
+      "rmse": 4.11,
+      "mape_percent": 12.77,
+      "incoming_accuracy_percent": 80.556,
+      "video_index": 7
+    },
+    {
+      "samples": 126,
+      "mae": 0.857,
+      "rmse": 1.333,
+      "mape_percent": 60.979,
+      "incoming_accuracy_percent": 88.095,
+      "video_index": 8
+    },
+    {
+      "samples": 363,
+      "mae": 4.113,
+      "rmse": 4.918,
+      "mape_percent": 59.322,
+      "incoming_accuracy_percent": 59.78,
+      "video_index": 9
+    },
+    {
+      "samples": 23,
+      "mae": 1.652,
+      "rmse": 1.888,
+      "mape_percent": 58.986,
+      "incoming_accuracy_percent": 60.87,
+      "video_index": 10
+    },
+    {
+      "samples": 1786,
+      "mae": 0.335,
+      "rmse": 0.686,
+      "mape_percent": 27.961,
+      "incoming_accuracy_percent": 97.144,
+      "video_index": 11
+    },
+    {
+      "samples": 1231,
+      "mae": 0.56,
+      "rmse": 0.968,
+      "mape_percent": 43.073,
+      "incoming_accuracy_percent": 92.77,
+      "video_index": 12
+    },
+    {
+      "samples": 3223,
+      "mae": 0.829,
+      "rmse": 1.227,
+      "mape_percent": 58.829,
+      "incoming_accuracy_percent": 88.551,
+      "video_index": 13
+    }
+  ]
+}

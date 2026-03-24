@@ -1,0 +1,11 @@
+DEMO MODEL EVALUATION
+=====================
+model_path: models/crowd_predictor_accboost_v2.joblib
+window_size: 24
+horizon_steps: 15
+demo_video_count: 13
+videos_evaluated: 13
+avg_mae: 2.877
+avg_rmse: 3.314
+avg_mape_percent: 40.333
+avg_incoming_accuracy_percent: 74.748

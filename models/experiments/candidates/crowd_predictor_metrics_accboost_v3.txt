@@ -1,0 +1,17 @@
+samples: 8070
+train_samples: 6456
+val_samples: 1614
+mae: 0.722
+rmse: 1.089
+mape_percent: 42.445
+incoming_accuracy_percent: 92.627
+selection_score: -92.602
+selection_target: incoming_accuracy
+best_config_name: std_wider
+best_hidden_layers: 128-64
+best_alpha: 0.0008
+best_learning_rate_init: 0.0008
+best_max_iter: 1200
+candidate_count: 4
+shuffle_split: 1
+selection_leaderboard: [{'name': 'std_balanced', 'hidden_layer_sizes': [96, 48], 'alpha': 0.0005, 'learning_rate_init': 0.001, 'max_iter': 1000, 'mae': 0.7379, 'rmse': 1.1284, 'mape_percent': 43.7854, 'incoming_accuracy_percent': 92.3792, 'score': -92.3531}, {'name': 'std_wider', 'hidden_layer_sizes': [128, 64], 'alpha': 0.0008, 'learning_rate_init': 0.0008, 'max_iter': 1200, 'mae': 0.7221, 'rmse': 1.0886, 'mape_percent': 42.4452, 'incoming_accuracy_percent': 92.627, 'score': -92.6017}, {'name': 'std_regularized', 'hidden_layer_sizes': [96, 64, 32], 'alpha': 0.0012, 'learning_rate_init': 0.0007, 'max_iter': 1300, 'mae': 0.7562, 'rmse': 1.0938, 'mape_percent': 46.8498, 'incoming_accuracy_percent': 92.1314, 'score': -92.1053}, {'name': 'std_dense', 'hidden_layer_sizes': [144, 72], 'alpha': 0.001, 'learning_rate_init': 0.00075, 'max_iter': 1300, 'mae': 0.7488, 'rmse': 1.111, 'mape_percent': 45.7414, 'incoming_accuracy_percent': 92.1933, 'score': -92.1672}]

@@ -36,19 +36,22 @@ def _safe(v):
 
 def build_html():
     metrics = _read_metrics_txt("models/crowd_predictor_metrics.txt")
-    training = _read_json("models/demo_training_report.json") or {}
+    training = _read_json("models/reports/current/demo_training_report.json") or _read_json("models/demo_training_report.json") or {}
     series = _read_json("models/demo_training_series.json") or {}
-    evaluation = _read_json("models/demo5_model_evaluation.json") or {}
+    evaluation = _read_json("models/reports/current/demo_model_evaluation.json") or _read_json("models/demo_model_evaluation.json") or {}
 
     config = training.get("training_config", {})
     videos = training.get("videos", [])
     eval_summary = evaluation.get("summary", {})
     eval_rows = evaluation.get("per_video", [])
+    demo_video_count = int(eval_summary.get("demo_video_count") or len(videos) or len(series.get("series", [])) or 0)
 
     series_info_rows = []
     for i, item in enumerate(series.get("series", []), start=1):
         counts = item.get("counts", [])
         densities = item.get("densities", [])
+        actions = item.get("actions", [])
+        attributes = item.get("attributes", [])
         if not counts:
             continue
         series_info_rows.append(
@@ -57,6 +60,8 @@ def build_html():
                 "count_samples": len(counts),
                 "count_preview": ", ".join(str(c) for c in counts[:20]),
                 "density_preview": ", ".join(f"{d:.4f}" for d in densities[:10]),
+                "action_preview": ", ".join(str(v) for v in actions[:3]),
+                "attribute_preview": ", ".join(str(v) for v in attributes[:3]),
             }
         )
 
@@ -71,7 +76,7 @@ def build_html():
     )
 
     series_rows_html = "".join(
-        f"<tr><td>{_safe(v.get('video_index'))}</td><td>{_safe(v.get('count_samples'))}</td><td>{_safe(v.get('count_preview'))}</td><td>{_safe(v.get('density_preview'))}</td></tr>"
+        f"<tr><td>{_safe(v.get('video_index'))}</td><td>{_safe(v.get('count_samples'))}</td><td>{_safe(v.get('count_preview'))}</td><td>{_safe(v.get('density_preview'))}</td><td>{_safe(v.get('action_preview'))}</td><td>{_safe(v.get('attribute_preview'))}</td></tr>"
         for v in series_info_rows
     )
 
@@ -98,14 +103,14 @@ def build_html():
 </head>
 <body>
   <h1>Crowd Model Training Explainability</h1>
-  <p class=\"muted\">This page explains how the NN predictor was trained from 5 demo videos and shows the resulting metrics.</p>
+  <p class=\"muted\">This page explains how the NN predictor was trained from {demo_video_count} demo videos and shows the resulting metrics.</p>
 
   <div class=\"card\">
     <h2>Training Process</h2>
     <ol>
       <li>Demo clips are prepared in <code>data/crowd_videos/demo_training</code>.</li>
       <li>For sampled frames, system detects persons using YOLO and extracts count and density sequences.</li>
-      <li>Sliding windows are built using count + density + elapsed-progress features.</li>
+      <li>Sliding windows are built using count + density + elapsed-progress + action/attribute features.</li>
       <li>A neural network regressor (MLP) is trained and validated.</li>
       <li>Model and reports are written to <code>models/</code>.</li>
     </ol>
@@ -117,6 +122,9 @@ def build_html():
       <div class=\"kpi\"><div class=\"label\">sample_every</div><div class=\"value\">{_safe(config.get('sample_every'))}</div></div>
       <div class=\"kpi\"><div class=\"label\">window_size</div><div class=\"value\">{_safe(config.get('window_size'))}</div></div>
       <div class=\"kpi\"><div class=\"label\">horizon_steps</div><div class=\"value\">{_safe(config.get('horizon_steps'))}</div></div>
+      <div class=\"kpi\"><div class=\"label\">feature_version</div><div class=\"value\">{_safe(config.get('feature_version'))}</div></div>
+      <div class=\"kpi\"><div class=\"label\">action_feature_size</div><div class=\"value\">{_safe(config.get('action_feature_size'))}</div></div>
+      <div class=\"kpi\"><div class=\"label\">attribute_feature_size</div><div class=\"value\">{_safe(config.get('attribute_feature_size'))}</div></div>
       <div class=\"kpi\"><div class=\"label\">resize</div><div class=\"value\">{_safe(config.get('resize_w'))}x{_safe(config.get('resize_h'))}</div></div>
     </div>
   </div>
@@ -133,7 +141,7 @@ def build_html():
   </div>
 
   <div class=\"card\">
-    <h2>Per-Video Training Summary (5 Demo Videos)</h2>
+    <h2>Per-Video Training Summary ({demo_video_count} Demo Videos)</h2>
     <table>
       <thead><tr><th>Video Path</th><th>Samples</th><th>Count Min</th><th>Count Max</th><th>Count Mean</th><th>Density Mean</th></tr></thead>
       <tbody>{video_rows_html}</tbody>
@@ -142,7 +150,7 @@ def build_html():
 
   <div class=\"card\">
     <h2>Post-Training Evaluation Summary</h2>
-    <p class=\"muted\">Average metrics across the 5 demo videos from <code>models/demo5_model_evaluation.json</code>.</p>
+    <p class="muted">Average metrics across the demo videos from <code>models/reports/current/demo_model_evaluation.json</code>.</p>
     <div class=\"grid\">
       <div class=\"kpi\"><div class=\"label\">videos_evaluated</div><div class=\"value\">{_safe(eval_summary.get('videos_evaluated'))}</div></div>
       <div class=\"kpi\"><div class=\"label\">avg_mae</div><div class=\"value\">{_safe(eval_summary.get('avg_mae'))}</div></div>
@@ -162,9 +170,9 @@ def build_html():
 
   <div class=\"card\">
     <h2>Sampled Series Preview</h2>
-    <p class=\"muted\">Preview of extracted training series values (counts and densities) from demo videos.</p>
+    <p class=\"muted\">Preview of extracted training series values (counts, densities, actions, and attributes) from demo videos.</p>
     <table>
-      <thead><tr><th>Video Index</th><th>Count Samples</th><th>Count Preview (first 20)</th><th>Density Preview (first 10)</th></tr></thead>
+      <thead><tr><th>Video Index</th><th>Count Samples</th><th>Count Preview (first 20)</th><th>Density Preview (first 10)</th><th>Action Preview (first 3)</th><th>Attribute Preview (first 3)</th></tr></thead>
       <tbody>{series_rows_html}</tbody>
     </table>
   </div>

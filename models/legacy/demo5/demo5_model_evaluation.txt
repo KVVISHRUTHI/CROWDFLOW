@@ -1,0 +1,11 @@
+DEMO-5 MODEL EVALUATION
+=======================
+model_path: models/crowd_predictor.joblib
+window_size: 24
+horizon_steps: 15
+demo_video_count: 10
+videos_evaluated: 10
+avg_mae: 3.477
+avg_rmse: 4.15
+avg_mape_percent: 50.968
+avg_incoming_accuracy_percent: 71.203

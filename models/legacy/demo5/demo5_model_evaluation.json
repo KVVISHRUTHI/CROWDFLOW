@@ -1,0 +1,95 @@
+{
+  "summary": {
+    "model_path": "models/crowd_predictor.joblib",
+    "window_size": 24,
+    "horizon_steps": 15,
+    "demo_video_count": 10,
+    "videos_evaluated": 10,
+    "avg_mae": 3.477,
+    "avg_rmse": 4.15,
+    "avg_mape_percent": 50.968,
+    "avg_incoming_accuracy_percent": 71.203
+  },
+  "per_video": [
+    {
+      "samples": 81,
+      "mae": 7.963,
+      "rmse": 8.487,
+      "mape_percent": 50.757,
+      "incoming_accuracy_percent": 46.914,
+      "video_index": 1
+    },
+    {
+      "samples": 81,
+      "mae": 6.185,
+      "rmse": 6.803,
+      "mape_percent": 41.692,
+      "incoming_accuracy_percent": 56.79,
+      "video_index": 2
+    },
+    {
+      "samples": 81,
+      "mae": 5.531,
+      "rmse": 6.414,
+      "mape_percent": 50.594,
+      "incoming_accuracy_percent": 59.259,
+      "video_index": 3
+    },
+    {
+      "samples": 81,
+      "mae": 2.642,
+      "rmse": 3.318,
+      "mape_percent": 18.938,
+      "incoming_accuracy_percent": 69.136,
+      "video_index": 4
+    },
+    {
+      "samples": 81,
+      "mae": 2.185,
+      "rmse": 2.769,
+      "mape_percent": 18.34,
+      "incoming_accuracy_percent": 67.901,
+      "video_index": 5
+    },
+    {
+      "samples": 50,
+      "mae": 1.32,
+      "rmse": 1.744,
+      "mape_percent": 124.0,
+      "incoming_accuracy_percent": 88.0,
+      "video_index": 6
+    },
+    {
+      "samples": 21,
+      "mae": 3.143,
+      "rmse": 3.532,
+      "mape_percent": 11.171,
+      "incoming_accuracy_percent": 71.429,
+      "video_index": 7
+    },
+    {
+      "samples": 93,
+      "mae": 0.71,
+      "rmse": 1.278,
+      "mape_percent": 45.097,
+      "incoming_accuracy_percent": 87.097,
+      "video_index": 8
+    },
+    {
+      "samples": 287,
+      "mae": 3.895,
+      "rmse": 5.362,
+      "mape_percent": 102.425,
+      "incoming_accuracy_percent": 65.505,
+      "video_index": 9
+    },
+    {
+      "samples": 10,
+      "mae": 1.2,
+      "rmse": 1.789,
+      "mape_percent": 46.667,
+      "incoming_accuracy_percent": 100.0,
+      "video_index": 10
+    }
+  ]
+}

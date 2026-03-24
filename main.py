@@ -3,6 +3,7 @@ import time
 import json
 import numpy as np
 from collections import Counter
+from typing import Dict, Tuple
 
 from models.yolo_model import load_model
 from processing.video_processing import load_video, read_frame
@@ -25,8 +26,9 @@ from dashboard.visualization import (
     draw_future_prediction_popup,
 )
 from processing.tracker import SimpleTracker
+from processing.hybrid_tracker import HybridTracker
 
-VIDEO_PATH = "data/crowd_videos/crowd3.mp4"
+VIDEO_PATH = "data/crowd_videos/crowd2.mp4"
 
 DISPLAY_SIZE = (1366, 768)
 DETECTION_INTERVAL = 2
@@ -42,8 +44,17 @@ PREDICTION_METRICS_PATH = "models/crowd_predictor_metrics.txt"
 ALERT_MIN_CONFIDENCE_PERCENT = 60.0
 ALERT_MIN_STREAK = 3
 
+# Adaptive duplicate-filter mode switching:
+# low crowd -> advanced short-loop anti-duplicate mode
+# high crowd -> legacy-stable mode to protect dense-scene performance
+HIGH_CROWD_ON_COUNT = 18
+HIGH_CROWD_OFF_COUNT = 12
+CROWD_EMA_ALPHA = 0.20
+
 count_history = []
 density_history = []
+action_history = []
+attribute_history = []
 
 
 def _update_unique_gallery(frame, tracked_objects, unique_gallery):
@@ -141,9 +152,89 @@ def _build_preview_frame(frame, unique_gallery, ordered_ids, page_index):
     return canvas
 
 
+def _update_tracker_compat(tracker, boxes, frame):
+    try:
+        return tracker.update(boxes, frame=frame)
+    except TypeError:
+        # Fallback for trackers that only accept detection boxes.
+        return tracker.update(boxes)
+
+
+def _set_tracker_mode_compat(tracker, mode):
+    if hasattr(tracker, "set_crowd_mode"):
+        try:
+            tracker.set_crowd_mode(mode)
+        except Exception:
+            pass
+
+
+def _compute_action_attribute_features(
+    objects,
+    boxes,
+    previous_centers: Dict[int, Tuple[int, int]],
+    frame_shape,
+):
+    current_centers: Dict[int, Tuple[int, int]] = {}
+    displacements = []
+
+    for x1, y1, x2, y2, obj_id in objects:
+        cx = int((x1 + x2) / 2)
+        cy = int((y1 + y2) / 2)
+        current_centers[int(obj_id)] = (cx, cy)
+        prev = previous_centers.get(int(obj_id))
+        if prev is None:
+            continue
+        displacements.append(float(np.hypot(cx - prev[0], cy - prev[1])))
+
+    frame_h, frame_w = frame_shape[:2]
+    frame_area = max(1.0, float(frame_h * frame_w))
+    frame_diag = max(1.0, float(np.hypot(frame_w, frame_h)))
+
+    tracked_count = len(objects)
+    detected_count = len(boxes)
+    avg_speed_px = float(np.mean(displacements)) if displacements else 0.0
+    moving_ratio = float(np.mean(np.array(displacements) > 2.0)) if displacements else 0.0
+    avg_speed_norm = min(1.0, avg_speed_px / max(1.0, frame_diag * 0.08))
+
+    track_coverage = tracked_count / max(1, detected_count)
+    entry_pressure = max(0.0, (detected_count - tracked_count) / max(1, detected_count))
+
+    box_areas = [max(0, x2 - x1) * max(0, y2 - y1) for x1, y1, x2, y2 in boxes]
+    avg_box_area_norm = (float(np.mean(box_areas)) / frame_area) if box_areas else 0.0
+    area_cv = 0.0
+    if box_areas:
+        mean_area = float(np.mean(box_areas))
+        if mean_area > 1e-6:
+            area_cv = float(np.std(box_areas) / mean_area)
+
+    spread_norm = 0.0
+    if current_centers:
+        centers = np.array(list(current_centers.values()), dtype=np.float32)
+        center_std = float(np.mean(np.std(centers, axis=0)))
+        spread_norm = min(1.0, center_std / max(1.0, frame_diag * 0.35))
+
+    occlusion_ratio = max(0.0, min(1.0, 1.0 - track_coverage))
+
+    action_features = [
+        round(avg_speed_norm, 6),
+        round(moving_ratio, 6),
+        round(entry_pressure, 6),
+        round(min(1.0, track_coverage), 6),
+    ]
+    attribute_features = [
+        round(avg_box_area_norm, 6),
+        round(area_cv, 6),
+        round(spread_norm, 6),
+        round(occlusion_ratio, 6),
+    ]
+    return action_features, attribute_features, current_centers
+
+
 def main():
     count_history.clear()
     density_history.clear()
+    action_history.clear()
+    attribute_history.clear()
 
     cv2.setUseOptimized(True)
     cv2.namedWindow(PREVIEW_WINDOW_NAME, cv2.WINDOW_NORMAL)
@@ -154,7 +245,11 @@ def main():
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    tracker = SimpleTracker()
+    try:
+        tracker = HybridTracker()
+    except Exception:
+        # Fallback keeps previous tracker behavior if Deep SORT setup is unavailable.
+        tracker = SimpleTracker()
     predictor = CrowdPredictor(
         model_path="models/crowd_predictor.joblib",
         window_size=24,
@@ -180,6 +275,7 @@ def main():
     incoming_streak = 0
     last_incoming = False
     alert_events = []
+    previous_tracked_centers: Dict[int, Tuple[int, int]] = {}
     prediction_log = open(PREDICTION_LOG_PATH, "w", encoding="utf-8")
     prediction_jsonl = open(PREDICTION_JSONL_PATH, "w", encoding="utf-8")
     prediction_alerts = open(PREDICTION_ALERTS_PATH, "w", encoding="utf-8")
@@ -190,6 +286,10 @@ def main():
     )
 
     try:
+        tracker_mode = "low"
+        smooth_detect_count = 0.0
+        _set_tracker_mode_compat(tracker, tracker_mode)
+
         while cap.isOpened():
             ret, frame = read_frame(cap)
             if not ret:
@@ -203,7 +303,24 @@ def main():
                 detection_step += 1
                 use_zoom = (detection_step % ZOOM_PASS_INTERVAL == 0)
                 boxes = detect_people(model, frame, use_zoom=use_zoom)
-                objects = tracker.update(boxes)
+
+                raw_detect_count = len(boxes)
+                if frame_count <= DETECTION_INTERVAL:
+                    smooth_detect_count = float(raw_detect_count)
+                else:
+                    smooth_detect_count = (
+                        CROWD_EMA_ALPHA * float(raw_detect_count)
+                        + (1.0 - CROWD_EMA_ALPHA) * smooth_detect_count
+                    )
+
+                if tracker_mode == "low" and smooth_detect_count >= HIGH_CROWD_ON_COUNT:
+                    tracker_mode = "high"
+                    _set_tracker_mode_compat(tracker, tracker_mode)
+                elif tracker_mode == "high" and smooth_detect_count <= HIGH_CROWD_OFF_COUNT:
+                    tracker_mode = "low"
+                    _set_tracker_mode_compat(tracker, tracker_mode)
+
+                objects = _update_tracker_compat(tracker, boxes, frame)
                 last_boxes = boxes
                 last_objects = objects
             else:
@@ -216,7 +333,19 @@ def main():
 
             # 📊 Count + density
             tracked_count = len(objects)
-            count_history.append(tracked_count)
+            detected_count = len(boxes)
+            coverage = tracked_count / max(1, detected_count)
+            if detected_count == 0:
+                fused_count = tracked_count
+            elif coverage < 0.70:
+                # In long-gap occlusions, tracker-confirmed IDs can lag; avoid undercount by trusting detections.
+                fused_count = max(tracked_count, detected_count)
+            else:
+                fused_count = max(
+                    tracked_count,
+                    int(round(0.70 * tracked_count + 0.30 * detected_count)),
+                )
+            count_history.append(int(fused_count))
 
             frame_area = max(1, frame.shape[0] * frame.shape[1])
             box_area_sum = 0
@@ -224,6 +353,15 @@ def main():
                 box_area_sum += max(0, x2 - x1) * max(0, y2 - y1)
             density_ratio = min(1.0, box_area_sum / frame_area)
             density_history.append(float(density_ratio))
+
+            action_features, attribute_features, previous_tracked_centers = _compute_action_attribute_features(
+                objects,
+                boxes,
+                previous_tracked_centers,
+                frame.shape,
+            )
+            action_history.append(action_features)
+            attribute_history.append(attribute_features)
 
             recent_window = count_history[-10:]
             count = int(round(sum(recent_window) / len(recent_window)))
@@ -237,7 +375,13 @@ def main():
 
             nn_ready = prediction_active and predictor.is_trained() and len(count_history) >= predictor.window_size
             if nn_ready:
-                nn_pred = predictor.predict(count_history, density_history, elapsed_ratio)
+                nn_pred = predictor.predict(
+                    count_history,
+                    density_history,
+                    elapsed_ratio,
+                    action_features=action_features,
+                    attribute_features=attribute_features,
+                )
             else:
                 nn_pred = count
 

@@ -1,0 +1,4 @@
+﻿promotion_time=20260324_213158
+active_model=models/crowd_predictor.joblib
+source_model=models/crowd_predictor_accboost_v4.joblib
+backup_dir=models/backups/20260324_213158

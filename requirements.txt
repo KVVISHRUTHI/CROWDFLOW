@@ -5,3 +5,4 @@ scikit-learn
 joblib
 Flask
 requests
+deep-sort-realtime

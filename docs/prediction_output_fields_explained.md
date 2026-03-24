@@ -5,8 +5,8 @@ This file explains every prediction output field used by the system.
 ## 1) Red Panel Fields (On-Screen)
 
 ### Current
-- Meaning: Current crowd estimate from tracked detections.
-- Source: Number of active tracked persons in current frame window.
+- Meaning: Current crowd estimate from fused tracker+detection signal.
+- Source: Coverage-aware blend of active tracked persons and current detections.
 
 ### Future
 - Meaning: Predicted near-future crowd count.

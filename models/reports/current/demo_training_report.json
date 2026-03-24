@@ -1,0 +1,266 @@
+{
+  "training_config": {
+    "sample_every": 4,
+    "resize_w": 1366,
+    "resize_h": 768,
+    "window_size": 24,
+    "horizon_steps": 15,
+    "optimize_level": "standard",
+    "shuffle_split": true,
+    "candidate_models": [
+      {
+        "name": "std_balanced",
+        "hidden_layer_sizes": [
+          96,
+          48
+        ],
+        "alpha": 0.0005,
+        "learning_rate_init": 0.001,
+        "max_iter": 1000
+      },
+      {
+        "name": "std_wider",
+        "hidden_layer_sizes": [
+          128,
+          64
+        ],
+        "alpha": 0.0008,
+        "learning_rate_init": 0.0008,
+        "max_iter": 1200
+      },
+      {
+        "name": "std_regularized",
+        "hidden_layer_sizes": [
+          96,
+          64,
+          32
+        ],
+        "alpha": 0.0012,
+        "learning_rate_init": 0.0007,
+        "max_iter": 1300
+      },
+      {
+        "name": "std_dense",
+        "hidden_layer_sizes": [
+          144,
+          72
+        ],
+        "alpha": 0.001,
+        "learning_rate_init": 0.00075,
+        "max_iter": 1300
+      }
+    ],
+    "feature_version": 2,
+    "action_feature_size": 4,
+    "attribute_feature_size": 4,
+    "model_path": "models/crowd_predictor.joblib"
+  },
+  "metrics": {
+    "samples": 8070,
+    "train_samples": 6456,
+    "val_samples": 1614,
+    "mae": 0.722,
+    "rmse": 1.089,
+    "mape_percent": 42.445,
+    "selection_score": 1.31,
+    "best_config_name": "std_wider",
+    "best_hidden_layers": "128-64",
+    "best_alpha": 0.0008,
+    "best_learning_rate_init": 0.0008,
+    "best_max_iter": 1200,
+    "candidate_count": 4,
+    "shuffle_split": 1,
+    "selection_leaderboard": [
+      {
+        "name": "std_balanced",
+        "hidden_layer_sizes": [
+          96,
+          48
+        ],
+        "alpha": 0.0005,
+        "learning_rate_init": 0.001,
+        "max_iter": 1000,
+        "mae": 0.7379,
+        "rmse": 1.1284,
+        "mape_percent": 43.7854,
+        "score": 1.345
+      },
+      {
+        "name": "std_wider",
+        "hidden_layer_sizes": [
+          128,
+          64
+        ],
+        "alpha": 0.0008,
+        "learning_rate_init": 0.0008,
+        "max_iter": 1200,
+        "mae": 0.7221,
+        "rmse": 1.0886,
+        "mape_percent": 42.4452,
+        "score": 1.3098
+      },
+      {
+        "name": "std_regularized",
+        "hidden_layer_sizes": [
+          96,
+          64,
+          32
+        ],
+        "alpha": 0.0012,
+        "learning_rate_init": 0.0007,
+        "max_iter": 1300,
+        "mae": 0.7562,
+        "rmse": 1.0938,
+        "mape_percent": 46.8498,
+        "score": 1.3888
+      },
+      {
+        "name": "std_dense",
+        "hidden_layer_sizes": [
+          144,
+          72
+        ],
+        "alpha": 0.001,
+        "learning_rate_init": 0.00075,
+        "max_iter": 1300,
+        "mae": 0.7488,
+        "rmse": 1.111,
+        "mape_percent": 45.7414,
+        "score": 1.3729
+      }
+    ]
+  },
+  "demo_video_count": 13,
+  "videos": [
+    {
+      "video_path": "data/crowd_videos/demo_training\\demo_clip_01.mp4",
+      "samples": 150,
+      "count_min": 8,
+      "count_max": 28,
+      "count_mean": 16.407,
+      "density_mean": 0.702619,
+      "elapsed_start": 0.006667,
+      "elapsed_end": 1.0
+    },
+    {
+      "video_path": "data/crowd_videos/demo_training\\demo_clip_02.mp4",
+      "samples": 150,
+      "count_min": 8,
+      "count_max": 27,
+      "count_mean": 15.973,
+      "density_mean": 0.702653,
+      "elapsed_start": 0.006667,
+      "elapsed_end": 1.0
+    },
+    {
+      "video_path": "data/crowd_videos/demo_training\\demo_clip_03.mp4",
+      "samples": 150,
+      "count_min": 4,
+      "count_max": 26,
+      "count_mean": 13.513,
+      "density_mean": 0.56031,
+      "elapsed_start": 0.006667,
+      "elapsed_end": 1.0
+    },
+    {
+      "video_path": "data/crowd_videos/demo_training\\demo_clip_04.mp4",
+      "samples": 150,
+      "count_min": 10,
+      "count_max": 20,
+      "count_mean": 14.073,
+      "density_mean": 0.30869,
+      "elapsed_start": 0.006667,
+      "elapsed_end": 1.0
+    },
+    {
+      "video_path": "data/crowd_videos/demo_training\\demo_clip_05.mp4",
+      "samples": 150,
+      "count_min": 8,
+      "count_max": 22,
+      "count_mean": 11.933,
+      "density_mean": 0.439173,
+      "elapsed_start": 0.006667,
+      "elapsed_end": 1.0
+    },
+    {
+      "video_path": "data/crowd_videos/demo_training\\demo_clip_06.mp4",
+      "samples": 111,
+      "count_min": 0,
+      "count_max": 5,
+      "count_mean": 0.486,
+      "density_mean": 0.010776,
+      "elapsed_start": 0.008989,
+      "elapsed_end": 0.997753
+    },
+    {
+      "video_path": "data/crowd_videos/demo_training\\demo_clip_07.mp4",
+      "samples": 75,
+      "count_min": 24,
+      "count_max": 39,
+      "count_mean": 31.12,
+      "density_mean": 0.140748,
+      "elapsed_start": 0.013201,
+      "elapsed_end": 0.990099
+    },
+    {
+      "video_path": "data/crowd_videos/demo_training\\demo_clip_08.mp4",
+      "samples": 165,
+      "count_min": 0,
+      "count_max": 6,
+      "count_mean": 0.552,
+      "density_mean": 0.00039,
+      "elapsed_start": 0.006051,
+      "elapsed_end": 0.998487
+    },
+    {
+      "video_path": "data/crowd_videos/demo_training\\demo_clip_09.mp4",
+      "samples": 419,
+      "count_min": 0,
+      "count_max": 26,
+      "count_mean": 16.539,
+      "density_mean": 0.951643,
+      "elapsed_start": 0.002382,
+      "elapsed_end": 0.998213
+    },
+    {
+      "video_path": "data/crowd_videos/demo_training\\demo_clip_10.mp4",
+      "samples": 62,
+      "count_min": 1,
+      "count_max": 5,
+      "count_mean": 2.371,
+      "density_mean": 0.320291,
+      "elapsed_start": 0.016129,
+      "elapsed_end": 1.0
+    },
+    {
+      "video_path": "data/crowd_videos/demo_training\\demo_clip_11.mp4",
+      "samples": 2001,
+      "count_min": 0,
+      "count_max": 5,
+      "count_mean": 0.302,
+      "density_mean": 0.002976,
+      "elapsed_start": 0.0005,
+      "elapsed_end": 0.999875
+    },
+    {
+      "video_path": "data/crowd_videos/demo_training\\demo_clip_12.mp4",
+      "samples": 1384,
+      "count_min": 0,
+      "count_max": 5,
+      "count_mean": 0.522,
+      "density_mean": 0.00565,
+      "elapsed_start": 0.000722,
+      "elapsed_end": 0.999458
+    },
+    {
+      "video_path": "data/crowd_videos/demo_training\\demo_clip_13.mp4",
+      "samples": 3597,
+      "count_min": 0,
+      "count_max": 7,
+      "count_mean": 0.853,
+      "density_mean": 0.007728,
+      "elapsed_start": 0.000278,
+      "elapsed_end": 0.999861
+    }
+  ]
+}
