@@ -1,0 +1,53 @@
+Main2 Crowd Prediction Result
+========================================
+Video: D:/projects/Crowd_System_AI/data/crowd_videos/crowd2.mp4
+Frames analyzed: 681
+Runtime (sec): 198.71
+Peak crowd: 21
+Average crowd: 14
+High-risk events: 21
+Incoming/forecast events: 117
+Peak future forecast: 282
+Average future forecast: 11
+Future risk distribution: SAFE:660, SURGE:21
+
+Recent Counts (last 20):
+9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 9, 9, 9, 10, 10, 10, 11, 11, 11
+
+Recent Prediction Events (up to 10):
+- Frame 621, elapsed 30.76%: now 11 -> future 132, risk SURGE, rec PREPARE_MARSHAL_TEAM
+- Frame 622, elapsed 30.81%: now 11 -> future 21, risk SAFE, rec PREPARE_MARSHAL_TEAM
+- Frame 623, elapsed 30.86%: now 12 -> future 21, risk SAFE, rec PREPARE_MARSHAL_TEAM
+- Frame 624, elapsed 30.91%: now 12 -> future 129, risk SURGE, rec PREPARE_MARSHAL_TEAM
+- Frame 625, elapsed 30.96%: now 12 -> future 65, risk SURGE, rec PREPARE_MARSHAL_TEAM
+- Frame 626, elapsed 31.01%: now 12 -> future 111, risk SURGE, rec PREPARE_MARSHAL_TEAM
+- Frame 627, elapsed 31.05%: now 12 -> future 19, risk SAFE, rec PREPARE_MARSHAL_TEAM
+- Frame 628, elapsed 31.10%: now 12 -> future 19, risk SAFE, rec PREPARE_MARSHAL_TEAM
+- Frame 629, elapsed 31.15%: now 12 -> future 19, risk SAFE, rec PREPARE_MARSHAL_TEAM
+- Frame 675, elapsed 33.43%: now 9 -> future 19, risk SAFE, rec WATCH_ENTRY_POINTS
+
+User Operation Timeline
+--------------------------------------------------------------------------------------------------------------
+#   | Runtime  | Frame   | Timeline | Operation          | Details                                                 
+--------------------------------------------------------------------------------------------------------------
+1   | 00:00:02 | 0       | 00:00:00 | RUN                | Playback started/resumed                                
+2   | 00:00:22 | 232     | 00:00:07 | PAUSE              | reason=Stop Button, frame=232, timeline=00:00:07, now...
+3   | 00:00:22 | 232     | 00:00:07 | STOP               | Playback paused by user                                 
+4   | 00:00:22 | 232     | 00:00:07 | RUN                | Playback started/resumed                                
+5   | 00:00:24 | 246     | 00:00:08 | PAUSE              | reason=Stop Button, frame=246, timeline=00:00:08, now...
+6   | 00:00:24 | 246     | 00:00:08 | STOP               | Playback paused by user                                 
+7   | 00:00:27 | 246     | 00:00:08 | OPEN_PREDICT_TI... | frame=246, elapsed=12.2%                                
+8   | 00:00:54 | 246     | 00:00:08 | APPLY_STUDIO_FO... | target=30%, frame=607, future=9, delta=-7, confidence...
+9   | 00:01:01 | 246     | 00:00:08 | RUN                | Playback started/resumed                                
+10  | 00:01:14 | 323     | 00:00:10 | TOGGLE_OVERLAY     | overlay=OFF                                             
+11  | 00:01:24 | 379     | 00:00:12 | TOGGLE_OVERLAY     | overlay=ON                                              
+12  | 00:02:20 | 680     | 00:00:22 | PAUSE              | reason=Stop Button, frame=680, timeline=00:00:22, now...
+13  | 00:02:20 | 680     | 00:00:22 | STOP               | Playback paused by user                                 
+
+Pause Frames and Result at Pause
+----------------------------------------------------------------------------------------------------------------------------------
+#   | Reason         | Frame   | Timeline | Now    | Future  | Delta  | Conf%  | Risk      | Recommendation                                        
+----------------------------------------------------------------------------------------------------------------------------------
+1   | Stop Button    | 232     | 00:00:07 | 18     | 0       | -18    | 68.7   | SAFE      | NORMAL_MONITORING                                     
+2   | Stop Button    | 246     | 00:00:08 | 16     | 0       | -16    | 68.3   | SAFE      | NORMAL_MONITORING                                     
+3   | Stop Button    | 680     | 00:00:22 | 10     | 0       | -10    | 68.8   | SAFE      | NORMAL_MONITORING                                     

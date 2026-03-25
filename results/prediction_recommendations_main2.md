@@ -1,10 +1,10 @@
 # Main2 Crowd Prediction Auto-Explain
 
 - Video: D:/projects/Crowd_System_AI/data/crowd_videos/crowd2.mp4
-- Frames analyzed: 345
-- Runtime seconds: 215.2
-- Peak crowd: 21
-- Average crowd: 15
+- Frames analyzed: 78
+- Runtime seconds: 13.1
+- Peak crowd: 16
+- Average crowd: 14
 - High-risk events: 0
 - Incoming/forecast events: 0
 

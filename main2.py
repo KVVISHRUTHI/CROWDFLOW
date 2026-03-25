@@ -39,6 +39,7 @@ DETECTION_INTERVAL = 3
 ZOOM_PASS_INTERVAL = 3
 FAST_STEP_SIZE = 2
 RESULTS_DIR = "results"
+CPS_RESULTS_DIR = os.path.join(RESULTS_DIR, "cps_results")
 PREDICTION_METRICS_PATH = "models/crowd_predictor_metrics.txt"
 PREDICTION_CSV_PATH = os.path.join(RESULTS_DIR, "prediction_output_log_main2.csv")
 PREDICTION_JSONL_PATH = os.path.join(RESULTS_DIR, "prediction_output_log_main2.jsonl")
@@ -184,6 +185,7 @@ class TimelineCrowdAnalyzer:
     def __init__(self, video_path: str) -> None:
         self.video_path = video_path
         os.makedirs(RESULTS_DIR, exist_ok=True)
+        os.makedirs(CPS_RESULTS_DIR, exist_ok=True)
         cv2.setUseOptimized(True)
         cv2.setNumThreads(max(1, min(8, os.cpu_count() or 4)))
         self.cap = cv2.VideoCapture(video_path)
@@ -240,11 +242,16 @@ class TimelineCrowdAnalyzer:
 
         self.current_frame_idx = 0
         self.running = False
+        self.terminate_requested = False
         self.overlay_enabled = True
-        self.auto_predict_enabled = True
         self.last_predict_message = "Move timeline and click Predict"
         self.studio_forecast: Optional[ForecastSimulation] = None
         self.studio_candidate_forecast: Optional[ForecastSimulation] = None
+        self.playback_segment_start_frame: Optional[int] = None
+        self.pause_timestamps_seconds: List[float] = []
+        self.pause_playback_intervals: List[Tuple[int, int]] = []
+        self.session_operations: List[Dict[str, str]] = []
+        self.pause_result_events: List[Dict[str, str]] = []
 
         self._ignore_trackbar_callback = False
         self.buttons = self._build_buttons()
@@ -260,6 +267,194 @@ class TimelineCrowdAnalyzer:
             "incoming,risk_status,congestion,flow_label,recommendation,gate_reason,action_recommendation,prediction_mode\n"
         )
 
+    def _log_user_operation(self, operation: str, details: str = "") -> None:
+        runtime_sec = max(0.0, time.time() - self.session_started_at)
+        frame_idx = int(self.current_frame_idx)
+        timeline_sec = self._seconds_from_frame(frame_idx)
+        self.session_operations.append(
+            {
+                "runtime": self._format_time(runtime_sec),
+                "frame": str(frame_idx),
+                "timeline": self._format_time(timeline_sec),
+                "operation": operation,
+                "details": self._safe_short(details, 140),
+            }
+        )
+
+    def _record_pause_event(self, reason: str = "Pause") -> None:
+        self.pause_timestamps_seconds.append(self._seconds_from_frame(self.current_frame_idx))
+        if self.playback_segment_start_frame is not None:
+            start = max(0, int(self.playback_segment_start_frame))
+            end = max(start, int(self.current_frame_idx))
+            self.pause_playback_intervals.append((start, end))
+            self.playback_segment_start_frame = None
+
+        analysis = self.cache.get(self.current_frame_idx)
+        if analysis is None and self.current_frame_idx >= 0:
+            try:
+                analysis = self.analyze_to(self.current_frame_idx)
+            except Exception:
+                analysis = None
+
+        row: Dict[str, str] = {
+            "reason": reason,
+            "frame": str(int(self.current_frame_idx)),
+            "timeline": self._format_time(self._seconds_from_frame(self.current_frame_idx)),
+            "current": "NA",
+            "future": "NA",
+            "delta": "NA",
+            "confidence": "NA",
+            "risk": "NA",
+            "recommendation": "NA",
+        }
+
+        if analysis is not None:
+            snap = analysis.snapshot
+            row.update(
+                {
+                    "current": str(int(snap.current_count)),
+                    "future": str(int(snap.future_count)),
+                    "delta": f"{int(snap.delta):+d}",
+                    "confidence": f"{float(snap.confidence_percent):.1f}",
+                    "risk": str(analysis.risk_status),
+                    "recommendation": str(analysis.recommendation),
+                }
+            )
+
+        self.pause_result_events.append(row)
+        self._log_user_operation(
+            "PAUSE",
+            f"reason={reason}, frame={row['frame']}, timeline={row['timeline']}, now={row['current']}, future={row['future']}, delta={row['delta']}",
+        )
+
+    def _format_table_line(self, values: List[str], widths: List[int]) -> str:
+        cells = []
+        for idx, value in enumerate(values):
+            text = (value or "").replace("\n", " ").strip()
+            if len(text) > widths[idx]:
+                text = text[: max(0, widths[idx] - 3)] + "..."
+            cells.append(text.ljust(widths[idx]))
+        return " | ".join(cells)
+
+    def _build_operation_table_lines(self) -> List[str]:
+        lines = ["User Operation Timeline", "-" * 110]
+        headers = ["#", "Runtime", "Frame", "Timeline", "Operation", "Details"]
+        widths = [3, 8, 7, 8, 18, 56]
+        lines.append(self._format_table_line(headers, widths))
+        lines.append("-" * 110)
+        if not self.session_operations:
+            lines.append("No user operations were recorded.")
+            return lines
+        for idx, op in enumerate(self.session_operations, start=1):
+            lines.append(
+                self._format_table_line(
+                    [
+                        str(idx),
+                        op.get("runtime", ""),
+                        op.get("frame", ""),
+                        op.get("timeline", ""),
+                        op.get("operation", ""),
+                        op.get("details", ""),
+                    ],
+                    widths,
+                )
+            )
+        return lines
+
+    def _build_pause_result_table_lines(self) -> List[str]:
+        lines = ["Pause Frames and Result at Pause", "-" * 130]
+        headers = ["#", "Reason", "Frame", "Timeline", "Now", "Future", "Delta", "Conf%", "Risk", "Recommendation"]
+        widths = [3, 14, 7, 8, 6, 7, 6, 6, 9, 54]
+        lines.append(self._format_table_line(headers, widths))
+        lines.append("-" * 130)
+        if not self.pause_result_events:
+            lines.append("No pause events were recorded.")
+            return lines
+        for idx, event in enumerate(self.pause_result_events, start=1):
+            lines.append(
+                self._format_table_line(
+                    [
+                        str(idx),
+                        event.get("reason", ""),
+                        event.get("frame", ""),
+                        event.get("timeline", ""),
+                        event.get("current", ""),
+                        event.get("future", ""),
+                        event.get("delta", ""),
+                        event.get("confidence", ""),
+                        event.get("risk", ""),
+                        event.get("recommendation", ""),
+                    ],
+                    widths,
+                )
+            )
+        return lines
+
+    def _build_cps_video_analysis_summary(self, runtime_sec: float, peak_count: int, avg_count: int) -> str:
+        if not self.count_history:
+            return "No frames analyzed"
+        return (
+            f"frames={len(self.count_history)}, runtime={runtime_sec:.1f}s, peak={peak_count}, avg={avg_count}, "
+            f"high_risk_events={len(self.high_risk_events)}, incoming_events={len(self.prediction_events)}"
+        )
+
+    def _write_cps_upload_report(self, runtime_sec: float, peak_count: int, avg_count: int) -> None:
+        video_name = os.path.splitext(os.path.basename(self.video_path))[0]
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        cps_path = os.path.join(CPS_RESULTS_DIR, f"cps_upload_result_{video_name}_{timestamp}.md")
+
+        duration_seconds = self._seconds_from_frame(max(0, self.total_frames - 1))
+        duration_text = self._format_time(duration_seconds)
+        analysis_summary = self._build_cps_video_analysis_summary(runtime_sec, peak_count, avg_count)
+
+        pause_count = len(self.pause_timestamps_seconds)
+        pause_timestamps = ", ".join([self._format_time(sec) for sec in self.pause_timestamps_seconds]) if self.pause_timestamps_seconds else "None"
+        pause_intervals = (
+            "; ".join(
+                [
+                    f"{self._format_time(self._seconds_from_frame(start))} -> {self._format_time(self._seconds_from_frame(end))}"
+                    for start, end in self.pause_playback_intervals
+                ]
+            )
+            if self.pause_playback_intervals
+            else "None"
+        )
+
+        if self.studio_forecast is not None:
+            final_surge, _ = self._surge_decision(
+                self.studio_forecast.gate_reason,
+                self.studio_forecast.incoming_probability_percent,
+                self.studio_forecast.incoming,
+            )
+            final_surge_text = (
+                f"{final_surge} | future={self.studio_forecast.predicted_count}, delta={self.studio_forecast.delta:+d}, "
+                f"confidence={self.studio_forecast.confidence_percent:.1f}%, risk={self.studio_forecast.future_risk_status}"
+            )
+        elif self.last_analyzed_frame >= 0 and self.last_analyzed_frame in self.cache:
+            last_analysis = self.cache[self.last_analyzed_frame]
+            snap = last_analysis.snapshot
+            final_surge, _ = self._surge_decision(snap.gate_reason, snap.incoming_probability_percent, bool(snap.incoming))
+            final_surge_text = (
+                f"{final_surge} | future={snap.future_count}, delta={snap.delta:+d}, "
+                f"confidence={snap.confidence_percent:.1f}%, risk={last_analysis.risk_status}"
+            )
+        else:
+            final_surge_text = "NO_DATA"
+
+        table_lines = [
+            "# CPS Upload Result",
+            "",
+            f"Video: {self.video_path}",
+            "",
+            "| Duration Of Uploaded Video | Video Analysis | Pause Count | Pause Timestamps | Pause Playback Intervals | Final Output Surge |",
+            "| --- | --- | ---: | --- | --- | --- |",
+            f"| {duration_text} | {analysis_summary} | {pause_count} | {pause_timestamps} | {pause_intervals} | {final_surge_text} |",
+            "",
+        ]
+
+        with open(cps_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(table_lines))
+
     def _build_buttons(self) -> List[Button]:
         y1 = DISPLAY_HEIGHT + 24
         y2 = DISPLAY_HEIGHT + BUTTON_BAR_HEIGHT - 14
@@ -270,11 +465,11 @@ class TimelineCrowdAnalyzer:
             "stop": 150,
             "predict": 180,
             "overlay": 180,
-            "auto": 190,
             "reset": 190,
+            "terminate": 190,
         }
         buttons: List[Button] = []
-        order = ["run", "stop", "predict", "overlay", "auto", "reset"]
+        order = ["run", "stop", "predict", "overlay", "reset", "terminate"]
         x = left
         for key in order:
             width = button_widths[key]
@@ -319,8 +514,8 @@ class TimelineCrowdAnalyzer:
             "stop": (38, 38, 220),
             "predict": (14, 118, 248),
             "overlay": (0, 155, 185),
-            "auto": (130, 92, 230),
             "reset": (0, 165, 255),
+            "terminate": (60, 60, 205),
         }
         if active:
             return active_fill.get(key, (0, 180, 255)), (12, 12, 12)
@@ -707,7 +902,8 @@ class TimelineCrowdAnalyzer:
                 if key in (13, ord("p")) and begin_requested:
                     self.studio_forecast = simulation
                     self.running = False
-                    self.current_frame_idx = int(simulation.target_frame)
+                    # Keep current timeline position to avoid expensive re-analysis jump on apply.
+                    # The selected studio forecast is still shown immediately in the main overlay.
                     surge_label, _ = self._surge_decision(
                         simulation.gate_reason,
                         simulation.incoming_probability_percent,
@@ -716,6 +912,10 @@ class TimelineCrowdAnalyzer:
                     applied_message = (
                         f"Applied studio forecast @ {simulation.target_percent}% (frame {simulation.target_frame + 1}): "
                         f"now {analysis.count} -> future {simulation.predicted_count} (confidence {simulation.confidence_percent:.1f}%, risk {simulation.future_risk_status}, surge {surge_label})"
+                    )
+                    self._log_user_operation(
+                        "APPLY_STUDIO_FORECAST",
+                        f"target={simulation.target_percent}%, frame={simulation.target_frame + 1}, future={simulation.predicted_count}, delta={simulation.delta:+d}, confidence={simulation.confidence_percent:.1f}%",
                     )
                     break
         finally:
@@ -731,13 +931,13 @@ class TimelineCrowdAnalyzer:
         if key == "stop":
             return "Stop"
         if key == "predict":
-            return "Predict +20s"
+            return "Predict Timeline"
         if key == "overlay":
             return f"Overlay: {'ON' if self.overlay_enabled else 'OFF'}"
-        if key == "auto":
-            return f"AutoPredict: {'ON' if self.auto_predict_enabled else 'OFF'}"
         if key == "reset":
             return "Reboot Timeline"
+        if key == "terminate":
+            return "End Prediction"
         return key
 
     def _flow_label(self, flow_vectors: List[Tuple[float, float]]) -> str:
@@ -1044,8 +1244,6 @@ class TimelineCrowdAnalyzer:
                 active = True
             if button.key == "overlay" and self.overlay_enabled:
                 active = True
-            if button.key == "auto" and self.auto_predict_enabled:
-                active = True
 
             fill, text_col = self._button_palette(button.key, active)
             cv2.rectangle(canvas, (button.x1, button.y1), (button.x2, button.y2), fill, -1)
@@ -1062,7 +1260,7 @@ class TimelineCrowdAnalyzer:
 
         cv2.putText(
             canvas,
-            "Keys: r=Run  s=Stop  p=Predict +20s  o=Overlay  a=AutoPredict  c=Reboot  q=Quit",
+            "Keys: r=Run  s=Stop  p=Predict Timeline  o=Overlay  c=Reboot  x=End Prediction  q=Quit",
             (20, DISPLAY_HEIGHT + 20),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.45,
@@ -1104,7 +1302,7 @@ class TimelineCrowdAnalyzer:
             cv2.putText(frame, f"Prediction unlocks at {PREDICTION_START_PERCENT:.0f}% timeline", (840, 116), cv2.FONT_HERSHEY_SIMPLEX, 0.56, (225, 225, 225), 1)
             cv2.putText(frame, f"Current progress: {analysis.elapsed_percent:.1f}%  |  Remaining: {pending:.1f}%", (840, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.54, (225, 225, 225), 1)
             cv2.putText(frame, f"Current Crowd Prediction: {current_nowcast}", (840, 162), cv2.FONT_HERSHEY_SIMPLEX, 0.54, (220, 220, 220), 1)
-            cv2.putText(frame, "+20s prediction is enabled only after analysis threshold", (840, 184), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (200, 200, 200), 1)
+            cv2.putText(frame, "Timeline prediction is enabled only after analysis threshold", (840, 184), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (200, 200, 200), 1)
         else:
             main_surge_label, main_surge_reason = self._surge_decision(
                 snap.gate_reason,
@@ -1172,12 +1370,20 @@ class TimelineCrowdAnalyzer:
 
     def _handle_button_action(self, key: str) -> None:
         if key == "run":
+            if not self.running and self.playback_segment_start_frame is None:
+                self.playback_segment_start_frame = int(self.current_frame_idx)
             self.running = True
-            self.last_predict_message = "Video running. Click Stop to pause, or Predict +20s for long-horizon forecast."
+            self.last_predict_message = "Video running. Click Stop to pause, or Predict Timeline for custom forecast."
+            self._log_user_operation("RUN", "Playback started/resumed")
         elif key == "stop":
+            if self.running:
+                self._record_pause_event(reason="Stop Button")
             self.running = False
-            self.last_predict_message = "Video paused. Use Predict +20s for explainable future simulation, or Run to continue."
+            self.last_predict_message = "Video paused. Use Predict Timeline for explainable future simulation, or Run to continue."
+            self._log_user_operation("STOP", "Playback paused by user")
         elif key == "predict":
+            if self.running:
+                self._record_pause_event(reason="Predict Button")
             self.running = False
             analysis = self.cache.get(self.current_frame_idx, self.analyze_to(self.current_frame_idx))
             if analysis.elapsed_percent < PREDICTION_START_PERCENT:
@@ -1185,27 +1391,33 @@ class TimelineCrowdAnalyzer:
                     f"Prediction blocked until {PREDICTION_START_PERCENT:.0f}% analysis. "
                     f"Current: {analysis.elapsed_percent:.1f}%"
                 )
+                self._log_user_operation("PREDICT_BLOCKED", self.last_predict_message)
                 self.render(force_predict=False)
                 return
-            self.render(force_predict=True)
-            self.last_predict_message = (
-                f"+20s forecast ready: now {analysis.snapshot.current_count} -> future {analysis.snapshot.future_count} "
-                f"(confidence {analysis.snapshot.confidence_percent:.1f}%, gate {analysis.snapshot.gate_reason})"
-            )
+            self._log_user_operation("OPEN_PREDICT_TIMELINE", f"frame={analysis.frame_idx}, elapsed={analysis.elapsed_percent:.1f}%")
+            self._open_prediction_timeline_window(analysis)
             self.render(force_predict=False)
         elif key == "overlay":
             self.overlay_enabled = not self.overlay_enabled
-            self.render(force_predict=False)
-        elif key == "auto":
-            self.auto_predict_enabled = not self.auto_predict_enabled
+            self._log_user_operation("TOGGLE_OVERLAY", f"overlay={'ON' if self.overlay_enabled else 'OFF'}")
             self.render(force_predict=False)
         elif key == "reset":
+            if self.running:
+                self._record_pause_event(reason="Reset Button")
             self.running = False
             self.current_frame_idx = 0
             self._reset_analysis_state()
             self.studio_forecast = None
             self.studio_candidate_forecast = None
+            self._log_user_operation("RESET", "Timeline rebooted to start")
             self.render(force_predict=False)
+        elif key == "terminate":
+            if self.running:
+                self._record_pause_event(reason="Terminate Button")
+            self.running = False
+            self.terminate_requested = True
+            self.last_predict_message = "Prediction session terminated by user."
+            self._log_user_operation("TERMINATE", "Session terminated from UI button")
 
     def on_mouse(self, event: int, x: int, y: int, _flags: int, _param: object) -> None:
         if event != cv2.EVENT_LBUTTONDOWN:
@@ -1305,6 +1517,9 @@ class TimelineCrowdAnalyzer:
                     f"- Frame {event.frame_idx}, elapsed {event.elapsed_percent:.2f}%: now {event.count} -> future {event.future_count}, risk {event.risk_status}, rec {event.recommendation}"
                 )
 
+        txt_lines.extend(["", *self._build_operation_table_lines()])
+        txt_lines.extend(["", *self._build_pause_result_table_lines()])
+
         with open(txt_path, "w", encoding="utf-8") as f:
             f.write("\n".join(txt_lines) + "\n")
 
@@ -1329,6 +1544,8 @@ class TimelineCrowdAnalyzer:
         with open(future_summary_path, "w", encoding="utf-8") as f:
             json.dump(future_summary, f, indent=2)
 
+        self._write_cps_upload_report(runtime_sec=runtime_sec, peak_count=peak_count, avg_count=avg_count)
+
         self.latest_result_txt_path = txt_path
 
     def run(self) -> None:
@@ -1345,7 +1562,7 @@ class TimelineCrowdAnalyzer:
                 loop_started = time.perf_counter()
                 if self.running:
                     self.current_frame_idx = min(self.total_frames - 1, self.current_frame_idx + FAST_STEP_SIZE)
-                    self.render(force_predict=self.auto_predict_enabled)
+                    self.render(force_predict=True)
 
                     render_elapsed = time.perf_counter() - loop_started
                     if self.frame_budget_sec > 0 and render_elapsed > self.frame_budget_sec * 1.8:
@@ -1354,8 +1571,10 @@ class TimelineCrowdAnalyzer:
                             self.current_frame_idx = min(self.total_frames - 1, self.current_frame_idx + min(5, extra_steps))
 
                     if self.current_frame_idx >= self.total_frames - 1:
+                        self._record_pause_event(reason="Video Ended")
                         self.running = False
                         self.last_predict_message = "Video ended. Click Reboot Timeline to run again from start."
+                        self._log_user_operation("VIDEO_ENDED", "Reached end of video")
 
                 if self.running:
                     spent_ms = int((time.perf_counter() - loop_started) * 1000.0)
@@ -1366,6 +1585,7 @@ class TimelineCrowdAnalyzer:
 
                 key = cv2.waitKey(wait_ms) & 0xFF
                 if key == ord("q"):
+                    self._log_user_operation("QUIT", "User exited session")
                     break
                 if key == ord("r"):
                     self._handle_button_action("run")
@@ -1375,19 +1595,29 @@ class TimelineCrowdAnalyzer:
                     self._handle_button_action("predict")
                 if key == ord("o"):
                     self._handle_button_action("overlay")
-                if key == ord("a"):
-                    self._handle_button_action("auto")
                 if key == ord("c"):
                     self._handle_button_action("reset")
+                if key == ord("x"):
+                    self._handle_button_action("terminate")
                 if key == 81:
+                    if self.running:
+                        self._record_pause_event(reason="Seek Left")
                     self.running = False
                     self.current_frame_idx = max(0, self.current_frame_idx - 10)
+                    self._log_user_operation("SEEK_LEFT", f"frame={self.current_frame_idx}")
                     self.render(force_predict=False)
                 if key == 83:
+                    if self.running:
+                        self._record_pause_event(reason="Seek Right")
                     self.running = False
                     self.current_frame_idx = min(self.total_frames - 1, self.current_frame_idx + 10)
+                    self._log_user_operation("SEEK_RIGHT", f"frame={self.current_frame_idx}")
                     self.render(force_predict=False)
+                if self.terminate_requested:
+                    break
         finally:
+            if self.running:
+                self._record_pause_event(reason="Session End")
             self._close_and_write_summary()
             print(f"[main2] Result TXT saved at: {self.latest_result_txt_path}")
             self.cap.release()
