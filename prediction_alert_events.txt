@@ -1,1 +1,0 @@
-frame,elapsed_percent,current_count,future_count,delta,confidence_percent,action_recommendation,gate_reason
